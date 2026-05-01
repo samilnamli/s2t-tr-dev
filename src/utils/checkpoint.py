@@ -54,11 +54,20 @@ def legacy_torch_load() -> Iterator[None]:
 
     Restores the original on exit, even if the wrapped block raises.
     Safe to nest; each entry stacks an extra restoration frame.
+
+    Implementation detail.
+        We **force** ``weights_only=False`` rather than ``setdefault``-ing it.
+        Lightning >= 2.6 explicitly passes ``weights_only=True`` from
+        ``trainer.test(ckpt_path=...)`` down to ``cloud_io._load``, which
+        means a ``setdefault`` is a silent no-op and the legacy fallback
+        never kicks in. Inside this context the caller has explicitly
+        opted into loose-mode loading, so we honor that intent over any
+        wrapped library's default.
     """
     original = torch.load
 
     def _patched(*args: Any, **kwargs: Any) -> Any:
-        kwargs.setdefault("weights_only", False)
+        kwargs["weights_only"] = False
         return original(*args, **kwargs)
 
     torch.load = _patched  # type: ignore[assignment]
