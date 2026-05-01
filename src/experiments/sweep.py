@@ -106,8 +106,19 @@ def _train_router(
     soft_ce_weight: float,
     soft_ce_temperature: float,
     seed: int,
+    eager_load: bool,
+    precision: str,
 ) -> None:
-    """Train one router via the Hydra-driven :mod:`src.training.train`."""
+    """Train one router via the Hydra-driven :mod:`src.training.train`.
+
+    Note on ``eager_load``.
+        Synthetic parquets are small enough to fit in RAM (a 5k-clip / T=128
+        / fp16 dataset is ~1.6 GB). Without ``eager_load=true`` the
+        DataLoader pulls every batch from disk via the lazy parquet
+        path, which on Colab/vast.ai is roughly 500x slower than RAM
+        access (~15 s/it vs ~0.03 s/it on a comparable GPU). The sweep
+        therefore forces eager loading.
+    """
     overrides = {
         "parquet_path": str(parquet),
         "arch": arch,
@@ -121,6 +132,8 @@ def _train_router(
         "soft_ce_weight": soft_ce_weight,
         "soft_ce_temperature": soft_ce_temperature,
         "seed": seed,
+        "eager_load": str(bool(eager_load)).lower(),
+        "precision": precision,
         "experiment_name": log_dir.name,
         "log_dir": str(log_dir.parent),
     }
@@ -167,8 +180,8 @@ def run_sweep(
     train_ratio: float = typer.Option(0.8, "--train-ratio"),
     val_ratio: float = typer.Option(0.1, "--val-ratio"),
     max_seq_len: int = typer.Option(256, "--max-seq-len"),
-    batch_size: int = typer.Option(32, "--batch-size"),
-    num_workers: int = typer.Option(2, "--num-workers"),
+    batch_size: int = typer.Option(64, "--batch-size"),
+    num_workers: int = typer.Option(4, "--num-workers"),
     max_epochs: int = typer.Option(30, "--max-epochs"),
     learning_rate: float = typer.Option(1e-4, "--learning-rate"),
     primary_weight: float = typer.Option(1.0, "--primary-weight"),
@@ -176,6 +189,19 @@ def run_sweep(
     soft_ce_weight: float = typer.Option(0.5, "--soft-ce-weight"),
     soft_ce_temperature: float = typer.Option(0.1, "--soft-ce-temperature"),
     seed: int = typer.Option(42, "--seed"),
+    eager_load: bool = typer.Option(
+        True, "--eager-load/--no-eager-load",
+        help=(
+            "Hold the parquet in RAM as flat float16 buffers. Default true; "
+            "essential for synthetic experiments where the dataset is small "
+            "(~1.6 GB at 5k clips) — disabling this drops throughput from "
+            "~30 it/s to ~0.07 it/s on Colab disk."
+        ),
+    ),
+    precision: str = typer.Option(
+        "bf16-mixed", "--precision",
+        help="Training precision. bf16-mixed needs Ampere+ GPUs; fall back to 16-mixed on T4.",
+    ),
     keep_parquets: bool = typer.Option(False, "--keep-parquets/--no-keep-parquets"),
 ):
     """Generate, train, and evaluate the full pipeline for each R value."""
@@ -194,6 +220,7 @@ def run_sweep(
             "noise_std": noise_std,
             "max_seq_len": max_seq_len,
             "batch_size": batch_size,
+            "num_workers": num_workers,
             "max_epochs": max_epochs,
             "learning_rate": learning_rate,
             "primary_weight": primary_weight,
@@ -203,6 +230,8 @@ def run_sweep(
             "train_ratio": train_ratio,
             "val_ratio": val_ratio,
             "seed": seed,
+            "eager_load": eager_load,
+            "precision": precision,
         },
         "by_r": {},
     }
@@ -244,6 +273,8 @@ def run_sweep(
                 soft_ce_weight=soft_ce_weight,
                 soft_ce_temperature=soft_ce_temperature,
                 seed=seed,
+                eager_load=eager_load,
+                precision=precision,
             )
         _evaluate_baselines(
             parquet=parquet,
