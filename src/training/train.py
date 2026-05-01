@@ -16,26 +16,16 @@ Loss:
 """
 
 import json
-import logging
 import os
 import sys
 import time
 from typing import Optional
 
-import numpy as np
-import pytorch_lightning as pl
-import torch
-import torch.nn.functional as F
 import hydra
+from loguru import logger
+import numpy as np
 from omegaconf import DictConfig, OmegaConf
-
-# We only load checkpoints we produced ourselves, so the weights_only security
-# hardening from PyTorch 2.6 is unnecessary here. Force the old behavior.
-_orig_torch_load = torch.load
-def _torch_load_full(*args, **kwargs):
-    kwargs["weights_only"] = False
-    return _orig_torch_load(*args, **kwargs)
-torch.load = _torch_load_full
+import pytorch_lightning as pl
 from pytorch_lightning.callbacks import (
     Callback,
     EarlyStopping,
@@ -43,18 +33,21 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
     TQDMProgressBar,
 )
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+from pytorch_lightning.loggers import WandbLogger
+import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
 from src.data.dataset import MODEL_NAMES, ASRFeatureDataset, collate_fn
 from src.models.mlp_pool import MLPPoolSelector
 from src.models.selector import ASRModelSelector
+from src.utils.checkpoint import legacy_torch_load
+from src.utils.git import git_state
+from src.utils.logging import setup_unified_logging
 
 ARCH_HIERARCHICAL = "hierarchical_transformer"
 ARCH_MLP_POOL = "mlp_pool"
 SUPPORTED_ARCHS = (ARCH_HIERARCHICAL, ARCH_MLP_POOL)
-
-logger = logging.getLogger(__name__)
 
 MODEL_DIMS = {
     "hubert":   1024,  # facebook/hubert-large-ls960-ft
@@ -82,8 +75,9 @@ class EpochSummary(Callback):
         m = {k: float(v) for k, v in trainer.callback_metrics.items()}
         elapsed = time.time() - self._epoch_start
         logger.info(
-            "Epoch %3d/%d — %.1fs — train_loss=%.4f train_wer=%.4f train_acc=%.4f"
-            "  val_loss=%.4f val_wer=%.4f val_acc=%.4f",
+            "Epoch {}/{} — {:.1f}s — "
+            "train_loss={:.4f} train_wer={:.4f} train_acc={:.4f}  "
+            "val_loss={:.4f} val_wer={:.4f} val_acc={:.4f}",
             trainer.current_epoch + 1, trainer.max_epochs, elapsed,
             m.get("train/total_loss_epoch", float("nan")),
             m.get("train/selected_wer_epoch", float("nan")),
@@ -107,7 +101,7 @@ class SaveSpecificEpochsCallback(Callback):
             os.makedirs(self.dirpath, exist_ok=True)
             ckpt_path = os.path.join(self.dirpath, f"epoch-{current_epoch:02d}.ckpt")
             trainer.save_checkpoint(ckpt_path)
-            logger.info(f"Saved specific epoch checkpoint: {ckpt_path}")
+            logger.info("Saved specific epoch checkpoint: {}", ckpt_path)
 
 
 class ASRSelectorModule(pl.LightningModule):
@@ -183,14 +177,17 @@ class ASRSelectorModule(pl.LightningModule):
         self.class_balanced_loss = class_balanced_loss
 
         if self.class_balanced_loss:
-            if class_priors is not None:
-                # Use dynamically computed priors from the training set
-                weights = torch.tensor([1.0/p if p > 0 else 0.0 for p in class_priors], dtype=torch.float32)
-            else:
-                # Fallback to Oracle Dataset Priors for AMI: Hubert: ~32.3%, Whisper: ~44.4%, Wav2Vec2: ~23.3%
-                weights = torch.tensor([1.0/0.323, 1.0/0.444, 1.0/0.233], dtype=torch.float32)
-            
-            # Normalize to preserve overall learning rate scale (sum = num_classes)
+            if class_priors is None:
+                raise ValueError(
+                    "class_balanced_loss=True requires `class_priors` to be passed "
+                    "explicitly (computed dynamically from the training split). "
+                    "Hard-coded AMI priors used to live here as a fallback; that "
+                    "code path was removed because it silently produced wrong "
+                    "weights on any dataset other than AMI."
+                )
+            weights = torch.tensor(
+                [1.0 / p if p > 0 else 0.0 for p in class_priors], dtype=torch.float32
+            )
             weights = weights / weights.sum() * len(MODEL_NAMES)
             self.register_buffer("class_weights", weights)
         else:
@@ -318,10 +315,7 @@ class ASRSelectorModule(pl.LightningModule):
 @hydra.main(version_base="1.3", config_path="../../configs", config_name="config")
 def train(cfg: DictConfig):
     """Train the ASR Model Selector."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_unified_logging(level="INFO")
 
     allow_tf32 = cfg.get("allow_tf32", True)
     if allow_tf32:
@@ -350,12 +344,10 @@ def train(cfg: DictConfig):
     n_train = int(n_total * cfg.train_ratio)
     n_val = int(n_total * cfg.val_ratio)
     n_test = n_total - n_train - n_val
-    import duckdb
     from src.data.analyze_priors import analyze_dataset_priors
 
-    logger.info("Dataset splits: train=%d, val=%d, test=%d", n_train, n_val, n_test)
+    logger.info("Dataset splits: train={}, val={}, test={}", n_train, n_val, n_test)
 
-    # Analyze Dataset Priors before training
     analyze_dataset_priors(cfg.parquet_path, verbose=True)
 
     train_ds, val_ds, test_ds = random_split(
@@ -383,8 +375,10 @@ def train(cfg: DictConfig):
         best_model_indices = np.argmin(train_wers, axis=1)
         counts = np.bincount(best_model_indices, minlength=len(MODEL_NAMES))
         class_priors = (counts / len(best_model_indices)).tolist()
-        logger.info("Computed train set class priors for balanced loss: %s", 
-                    dict(zip(MODEL_NAMES, class_priors)))
+        logger.info(
+            "Computed train set class priors for balanced loss: {}",
+            dict(zip(MODEL_NAMES, class_priors)),
+        )
 
     lightning_model = ASRSelectorModule(
         arch=cfg.arch,
@@ -415,7 +409,7 @@ def train(cfg: DictConfig):
     param_counts = lightning_model.model.count_parameters()
     logger.info("=== Model Parameter Counts ===")
     for k, v in param_counts.items():
-        logger.info("  %25s: %10d", k, v)
+        logger.info("  {:>25}: {:>10}", k, v)
 
     is_tty = sys.stdout.isatty()
     test_average_epochs = cfg.get("test_average_epochs", 1)
@@ -450,13 +444,16 @@ def train(cfg: DictConfig):
     if isinstance(test_average_epochs, (list, tuple)):
         callbacks.append(SaveSpecificEpochsCallback(test_average_epochs, ckpt_dir))
 
-    # Initialize W&B Logger
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    cfg_dict["git"] = git_state()
     wandb_logger = WandbLogger(
         project="s2t-tr-dev",
         name=cfg.experiment_name,
         group=cfg.get("wandb_group"),
         save_dir=cfg.log_dir,
-        config=OmegaConf.to_container(cfg, resolve=True)
+        log_model="best",
+        save_code=True,
+        config=cfg_dict,
     )
 
     trainer_kwargs = dict(
@@ -483,51 +480,71 @@ def train(cfg: DictConfig):
     logger.info("Starting training...")
     trainer.fit(lightning_model, train_loader, val_loader)
 
-    logger.info("Running test evaluation...")
-    ckpts_to_test = []
+    logger.info("Running test evaluation on the best checkpoint(s)...")
+    ckpts_to_test: list[Optional[str]] = []
 
     if isinstance(test_average_epochs, int) and test_average_epochs > 1:
-        # Average the top K checkpoints
         if checkpoint_callback.best_k_models:
             sorted_ckpts = sorted(checkpoint_callback.best_k_models.items(), key=lambda x: x[1])
             ckpts_to_test = [p for p, _ in sorted_ckpts[:test_average_epochs]]
-            logger.info(f"Averaging top {len(ckpts_to_test)} checkpoints: {ckpts_to_test}")
+            logger.info("Averaging top {} checkpoints: {}", len(ckpts_to_test), ckpts_to_test)
         else:
             ckpts_to_test = [checkpoint_callback.best_model_path]
     elif isinstance(test_average_epochs, (list, tuple)):
-        # Average specific epochs
         for ep in test_average_epochs:
             p = os.path.join(ckpt_dir, f"epoch-{ep:02d}.ckpt")
             if os.path.exists(p):
                 ckpts_to_test.append(p)
             else:
-                logger.warning(f"Requested specific epoch checkpoint not found: {p}")
-        logger.info(f"Averaging specific epoch checkpoints: {ckpts_to_test}")
+                logger.warning("Requested specific epoch checkpoint not found: {}", p)
+        logger.info("Averaging specific epoch checkpoints: {}", ckpts_to_test)
     else:
-        # Default single best checkpoint
         if checkpoint_callback.best_model_path:
             ckpts_to_test = [checkpoint_callback.best_model_path]
         else:
             ckpts_to_test = [None]
-        logger.info(f"Testing on single best checkpoint: {ckpts_to_test}")
+        logger.info("Testing on single best checkpoint: {}", ckpts_to_test)
 
     if not ckpts_to_test:
         logger.warning("No checkpoints found to test. Testing on current weights.")
         ckpts_to_test = [None]
 
+    # Per-checkpoint metrics. We disable the W&B logger on the trainer for
+    # the per-checkpoint passes so the W&B run summary contains only the
+    # final averaged result (one row per model = clean dashboards).
+    trainer_for_test = pl.Trainer(
+        accelerator="auto", devices=1,
+        precision=cfg.precision, logger=False,
+        enable_progress_bar=is_tty,
+    )
     all_metrics = []
-    for ckpt in ckpts_to_test:
-        logger.info(f"Evaluating checkpoint: {ckpt}")
-        test_metrics_list = trainer.test(lightning_model, test_loader, ckpt_path=ckpt)
-        if test_metrics_list:
-            all_metrics.append(test_metrics_list[0])
+    with legacy_torch_load():
+        for ckpt in ckpts_to_test:
+            logger.info("Evaluating checkpoint: {}", ckpt)
+            test_metrics_list = trainer_for_test.test(
+                lightning_model, test_loader, ckpt_path=ckpt
+            )
+            if test_metrics_list:
+                all_metrics.append(test_metrics_list[0])
 
     if all_metrics:
-        avg_metrics = {}
-        for k in all_metrics[0].keys():
-            avg_metrics[k] = sum(m[k] for m in all_metrics) / len(all_metrics)
+        avg_metrics = {
+            k: sum(m[k] for m in all_metrics) / len(all_metrics)
+            for k in all_metrics[0].keys()
+        }
         test_results = avg_metrics
-        logger.info("Averaged Test Metrics: %s", test_results)
+        logger.info("Averaged Test Metrics: {}", test_results)
+        # Log only the final averaged result to W&B under final_test/
+        # so the run summary reflects a single, unambiguous test row.
+        final_payload = {
+            f"final_test/{k.replace('test/', '')}": float(v)
+            for k, v in test_results.items()
+        }
+        try:
+            wandb_logger.experiment.log(final_payload)
+            wandb_logger.experiment.summary.update(final_payload)
+        except Exception as exc:  # pragma: no cover - W&B may be offline
+            logger.warning("Failed to log final_test metrics to W&B: {}", exc)
     else:
         test_results = {}
 
@@ -539,14 +556,17 @@ def train(cfg: DictConfig):
     }
     test_json_path = os.path.join(results_dir, "test_results.json")
     with open(test_json_path, "w") as f:
-        json.dump({"split": "test", **flat_test, "averaged_checkpoints": ckpts_to_test}, f, indent=2)
-    logger.info("Wrote test results to %s", test_json_path)
-    
-    # Updated config snapshot for Single Source of Truth
+        json.dump(
+            {"split": "test", **flat_test, "averaged_checkpoints": ckpts_to_test},
+            f, indent=2,
+        )
+    logger.info("Wrote test results to {}", test_json_path)
+
     config_snapshot = OmegaConf.to_container(cfg, resolve=True)
+    config_snapshot["git"] = git_state()
     with open(os.path.join(results_dir, "config.json"), "w") as f:
         json.dump(config_snapshot, f, indent=2)
-    logger.info("Training complete. Logs saved to %s", results_dir)
+    logger.info("Training complete. Logs saved to {}", results_dir)
 
 
 if __name__ == "__main__":

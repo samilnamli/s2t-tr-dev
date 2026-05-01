@@ -18,17 +18,17 @@ Usage:
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Dict, Optional
 
+from loguru import logger
 import numpy as np
 import pyarrow.parquet as pq
 import typer
 
 from src.data.dataset import MODEL_NAMES, WER_COLUMNS
+from src.utils.logging import setup_unified_logging
 
-logger = logging.getLogger(__name__)
 app = typer.Typer(help="Training-free routing baselines on a feature parquet.")
 
 
@@ -156,16 +156,13 @@ def evaluate(
     ),
 ):
     """Compute random / weighted-random / per-base-model / oracle baselines."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_unified_logging(level="INFO")
 
     wer = _load_wer_matrix(parquet_path)
     n_total = wer.shape[0]
     splits = _split_indices(n_total, train_ratio, val_ratio, seed)
     logger.info(
-        "Loaded WER matrix from %s — N=%d, K=%d, splits: train=%d val=%d test=%d",
+        "Loaded WER matrix from {} - N={}, K={}, splits: train={} val={} test={}",
         parquet_path, n_total, wer.shape[1],
         len(splits["train"]), len(splits["val"]), len(splits["test"]),
     )
@@ -184,20 +181,20 @@ def evaluate(
         results[s] = _compute_baselines(train_wer, eval_wer, seed=seed)
 
     for s, by_baseline in results.items():
-        logger.info("=== Baselines on %s split ===", s)
+        logger.info("=== Baselines on {} split ===", s)
         for name, stats in by_baseline.items():
             if "wer_mean" in stats:
                 logger.info(
-                    "  %-22s wer=%.4f ± %.4f (n=%d)",
+                    "  {:<22} wer={:.4f} +/- {:.4f} (n={})",
                     name, stats["wer_mean"], stats["wer_sem"], stats["n"],
                 )
             elif "value" in stats:
                 logger.info(
-                    "  %-22s value=%.4f (n=%d)",
+                    "  {:<22} value={:.4f} (n={})",
                     name, stats["value"], stats["n"],
                 )
             elif name == "weighted_random_weights":
-                logger.info("  weighted_random_weights: %s", stats)
+                logger.info("  weighted_random_weights: {}", stats)
 
     if save_json:
         out = Path(save_json)
@@ -210,7 +207,7 @@ def evaluate(
                 "seed": seed,
                 "results": results,
             }, f, indent=2)
-        logger.info("Saved results to %s", save_json)
+        logger.info("Saved results to {}", save_json)
 
 
 if __name__ == "__main__":

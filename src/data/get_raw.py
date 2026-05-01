@@ -1,9 +1,7 @@
-from datasets import load_dataset
-from src.data.config import ALL_DATASETS # Merkezi yerden alıyoruz
-
-import typer
 from loguru import logger
-from typing import Annotated
+import typer
+
+from src.data.config import ALL_DATASETS  # Merkezi yerden alıyoruz
 
 app = typer.Typer()
 

@@ -1,8 +1,10 @@
-from dataclasses import dataclass, field
-from datasets import load_dataset
+from dataclasses import dataclass
 from typing import Dict
 
-from src.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+from datasets import load_dataset
+
+from src.config import RAW_DATA_DIR
+
 
 @dataclass
 class DatasetConfig:

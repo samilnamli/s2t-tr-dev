@@ -1,3 +1,30 @@
+experiment_metadata:
+  name: ablation_architecture
+  parent: null
+  status: deprecated
+  created: 2026-05-01
+  author: huseyin-karaca
+  deprecated_for: ablation_architecture_v2
+
+  interpretation: |
+    First version of the architecture ablation on AMI. Toggles the
+    cross-attention bridge (no_cross_attention=true), Stage-1 weight
+    sharing (separate_stage1=true), and includes the MLP-pool baseline
+    for completeness. Single seed (42) per row.
+
+  rationale: |
+    Insufficient for Tab. IV as written. The manuscript table has 8
+    rows: Default, -bridge, -shared Stage 1, ell_stage1=1, ell_stage1=4,
+    ell_stage2=2, d=128, d=512. The v1 file only covers 3 of those
+    (Default + -bridge + -shared Stage 1) plus the MLP-pool baseline
+    that is duplicated from the main results. The depth/width sweep
+    (5 missing rows) is not covered anywhere.
+
+  hypothesis: |
+    Superseded by v2.
+
+# ---------------------------------------------------------------------------
+
 _comment_: "Architecture ablation. Tests the impact of the cross-attention bridge and shared stage-1 weights."
 parquet_path: "data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet"
 skip_rover: true

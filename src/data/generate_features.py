@@ -1,15 +1,14 @@
 import os
 import re
-import pandas as pd
-import torch
-import evaluate
-from datasets import Audio
 from typing import List
+
+from datasets import Audio
+import evaluate
+import torch
 import typer
 
-from src.data.config import ALL_DATASETS
 from src.base_models.config import ALL_BASE_MODELS
-from src.config import PROJ_ROOT
+from src.data.config import ALL_DATASETS
 
 app = typer.Typer(help="Generates outputs (embedding/wer) for multiple datasets and models.")
 

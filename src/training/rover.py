@@ -21,18 +21,18 @@ Usage:
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import jiwer
+from loguru import logger
 import numpy as np
 import pyarrow.parquet as pq
 import typer
 
 from src.data.dataset import MODEL_NAMES, WER_COLUMNS
+from src.utils.logging import setup_unified_logging
 
-logger = logging.getLogger(__name__)
 app = typer.Typer(help="ROVER and weighted-ROVER hypothesis combination baselines.")
 
 TRANSCRIPTION_COLUMNS: Dict[str, str] = {
@@ -235,16 +235,13 @@ def evaluate(
     save_json: Optional[str] = typer.Option(None, "--save-json"),
 ):
     """Compute ROVER and weighted-ROVER on the requested split."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_unified_logging(level="INFO")
 
     refs, hyps, wer = _load_columns(parquet_path)
     n_total = len(refs)
     splits = _split_indices(n_total, train_ratio, val_ratio, seed)
     logger.info(
-        "Loaded %d clips from %s — train=%d val=%d test=%d",
+        "Loaded {} clips from {} - train={} val={} test={}",
         n_total, parquet_path,
         len(splits["train"]), len(splits["val"]), len(splits["test"]),
     )
@@ -260,8 +257,8 @@ def evaluate(
     inv = np.maximum(1.0 - train_wer_mean, 1e-6)
     weighted = inv / inv.sum()
     uniform = np.full(len(MODEL_NAMES), 1.0 / len(MODEL_NAMES), dtype=np.float32)
-    logger.info("Train-WER means: %s", dict(zip(MODEL_NAMES, train_wer_mean.tolist())))
-    logger.info("Weighted-ROVER weights: %s", dict(zip(MODEL_NAMES, weighted.tolist())))
+    logger.info("Train-WER means: {}", dict(zip(MODEL_NAMES, train_wer_mean.tolist())))
+    logger.info("Weighted-ROVER weights: {}", dict(zip(MODEL_NAMES, weighted.tolist())))
 
     results: Dict[str, Dict] = {}
     for s in target:
@@ -271,7 +268,7 @@ def evaluate(
             _, per_clip, corpus = _run_rover(refs, hyps, idx, w)
             per_split[name] = _summarize(per_clip, corpus)
             logger.info(
-                "[%s] %-16s wer_mean=%.4f wer_corpus=%.4f (n=%d)",
+                "[{}] {:<16} wer_mean={:.4f} wer_corpus={:.4f} (n={})",
                 s, name, per_split[name]["wer_mean"],
                 per_split[name]["wer_corpus"], per_split[name]["n"],
             )
@@ -292,7 +289,7 @@ def evaluate(
                 "seed": seed,
                 "results": results,
             }, f, indent=2)
-        logger.info("Saved ROVER results to %s", save_json)
+        logger.info("Saved ROVER results to {}", save_json)
 
 
 if __name__ == "__main__":

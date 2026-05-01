@@ -13,26 +13,19 @@ Usage:
 """
 
 import json
-import logging
 from typing import Optional
 
+from loguru import logger
 import pytorch_lightning as pl
 import torch
-import typer
 from torch.utils.data import DataLoader, random_split
-
-# We only load checkpoints we produced ourselves, so the weights_only security
-# hardening from PyTorch 2.6 is unnecessary here. Force the old behavior.
-_orig_torch_load = torch.load
-def _torch_load_full(*args, **kwargs):
-    kwargs["weights_only"] = False
-    return _orig_torch_load(*args, **kwargs)
-torch.load = _torch_load_full
+import typer
 
 from src.data.dataset import ASRFeatureDataset, collate_fn
 from src.training.train import ASRSelectorModule
+from src.utils.checkpoint import legacy_torch_load
+from src.utils.logging import setup_unified_logging
 
-logger = logging.getLogger(__name__)
 app = typer.Typer(help="Evaluate a trained ASR Model Selector checkpoint.")
 
 
@@ -69,19 +62,17 @@ def evaluate(
     ),
 ):
     """Load a checkpoint and compute metrics on the chosen split."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_unified_logging(level="INFO")
     pl.seed_everything(seed)
 
-    logger.info("Loading checkpoint: %s", checkpoint)
-    model = ASRSelectorModule.load_from_checkpoint(checkpoint)
+    logger.info("Loading checkpoint: {}", checkpoint)
+    with legacy_torch_load():
+        model = ASRSelectorModule.load_from_checkpoint(checkpoint)
     model.eval()
 
     full_ds = ASRFeatureDataset(parquet_path=parquet_path, max_seq_len=max_seq_len)
     split_ds = _select_split(full_ds, split, train_ratio, val_ratio, seed)
-    logger.info("Evaluating on split '%s' (%d samples)", split, len(split_ds))
+    logger.info("Evaluating on split '{}' ({} samples)", split, len(split_ds))
 
     loader = DataLoader(
         split_ds, batch_size=batch_size, shuffle=False,
@@ -93,17 +84,18 @@ def evaluate(
         precision="16-mixed", logger=False,
         enable_progress_bar=True,
     )
-    results = trainer.test(model, loader)[0]
+    with legacy_torch_load():
+        results = trainer.test(model, loader)[0]
 
     clean = {k.replace("test/", ""): float(v) for k, v in results.items()}
-    logger.info("=== Results (%s) ===", split)
+    logger.info("=== Results ({}) ===", split)
     for k, v in clean.items():
-        logger.info("  %-22s: %.4f", k, v)
+        logger.info("  {:<22}: {:.4f}", k, v)
 
     if save_json:
         with open(save_json, "w") as f:
             json.dump({"checkpoint": checkpoint, "split": split, **clean}, f, indent=2)
-        logger.info("Saved results to %s", save_json)
+        logger.info("Saved results to {}", save_json)
 
 
 if __name__ == "__main__":

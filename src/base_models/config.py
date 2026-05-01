@@ -1,10 +1,14 @@
 from dataclasses import dataclass
-from typing import Any, Dict, List, Type
+from typing import List, Type
+
 import torch
 from transformers import (
-    WhisperForConditionalGeneration, WhisperProcessor,
-    Wav2Vec2ForCTC, Wav2Vec2Processor,
-    HubertForCTC, Data2VecAudioForCTC,
+    Data2VecAudioForCTC,
+    HubertForCTC,
+    Wav2Vec2ForCTC,
+    Wav2Vec2Processor,
+    WhisperForConditionalGeneration,
+    WhisperProcessor,
 )
 
 

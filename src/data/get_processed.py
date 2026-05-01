@@ -1,7 +1,8 @@
 import os
+
 import gdown
-import typer
 from loguru import logger
+import typer
 
 app = typer.Typer(help="Download processed datasets from Google Drive")
 

@@ -29,8 +29,8 @@ from typing import Dict, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pyarrow.parquet as pq
-import typer
 from sklearn.decomposition import PCA
+import typer
 
 from src.data.synthetic import (
     EXPERT_ORDER,

@@ -1,0 +1,105 @@
+experiment_metadata:
+  name: ablation_loss_v2
+  parent: ablation_loss
+  status: active
+  created: 2026-05-01
+  author: huseyin-karaca
+  deprecated_for: null
+
+  interpretation: |
+    The v1 ablation_loss config used soft_ce_temperature = 1.5 for
+    both the "loss_proposed" and "loss_soft_ce_only" rows, which
+    contradicts the manuscript Tab. III caption (tau = 0.1 reported
+    as the chosen value for the proposed mix). The audit on
+    2026-05-01 also flagged that the v1 file used a single seed,
+    which underestimates variance.
+
+  rationale: |
+    For the manuscript Tab. III we need:
+      (1) the proposed mix to use the same tau as the manuscript
+          quotes (tau = 0.1) so the loss-coefficient column is
+          internally consistent;
+      (2) the "Soft CE only" row uses tau = 0.1 too, since the soft
+          loss family in the paper is studied with a single
+          temperature schedule;
+      (3) three seeds (42, 2, 123) per row so the table can carry
+          mean +/- std and we can spot-check that "WER + Soft CE"
+          really is the best on average, not just on seed 42; and
+      (4) the loss recipe matches what is reported in the AMI main
+          results so that the loss ablation winner is the same model
+          that produces the AMI main-results row.
+
+  hypothesis: |
+    On the AMI test split we expect:
+      - WER only            : WER ~ 0.37-0.40, sel_acc ~ 0.40-0.50
+      - Hard CE only        : WER ~ 0.35-0.38, sel_acc ~ 0.55-0.65
+      - Soft CE only        : WER ~ 0.36-0.39
+      - WER + Hard CE       : WER ~ 0.36-0.39 (no improvement;
+        manuscript narrative)
+      - WER + Soft CE       : WER ~ 0.30-0.34, smallest oracle gap
+        across all rows (the row we will promote to the main results)
+    Falsifying observations: if "WER + Soft CE" is not the lowest WER
+    OR not the smallest oracle-gap row in the mean over seeds, the
+    paper's loss-design narrative breaks and we must rerun with a
+    different temperature or weighting before submission.
+
+# ---------------------------------------------------------------------------
+
+parquet_path: "data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet"
+skip_rover: true
+
+shared:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  max_seq_len: 2000
+  batch_size: 128
+  num_workers: 4
+  max_epochs: 50
+  learning_rate: 1e-4
+  precision: "bf16-mixed"
+  eager_load: true
+  allow_tf32: false
+  test_average_epochs: 1
+  early_stopping_patience: 8
+  arch: "hierarchical_transformer"
+  class_balanced_loss: true
+
+methods:
+  # Manuscript Tab. III row 1: WER only (lambda_hard=lambda_soft=0).
+  - name: "loss_wer_only_v2"
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.0
+    seed: [42, 2, 123]
+
+  # Manuscript Tab. III row 2: Hard CE only (lambda_wer=lambda_soft=0).
+  - name: "loss_hard_ce_only_v2"
+    primary_weight: 0.0
+    aux_ce_weight: 1.0
+    soft_ce_weight: 0.0
+    seed: [42, 2, 123]
+
+  # Manuscript Tab. III row 3: Soft CE only (lambda_wer=lambda_hard=0,
+  # tau=0.1 per manuscript caption).
+  - name: "loss_soft_ce_only_v2"
+    primary_weight: 0.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 1.0
+    soft_ce_temperature: 0.1
+    seed: [42, 2, 123]
+
+  # Manuscript Tab. III row 4: WER + Hard CE.
+  - name: "loss_wer_hard_ce_v2"
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.0
+    seed: [42, 2, 123]
+
+  # Manuscript Tab. III row 5 (proposed winner): WER + Soft CE,
+  # tau = 0.1 per manuscript caption.
+  - name: "loss_wer_soft_ce_v2"
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.1
+    seed: [42, 2, 123]

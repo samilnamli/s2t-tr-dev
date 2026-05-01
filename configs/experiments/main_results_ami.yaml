@@ -1,3 +1,42 @@
+experiment_metadata:
+  name: main_results_ami
+  parent: null
+  status: active
+  created: 2026-04-29
+  author: huseyin-karaca
+  deprecated_for: null
+
+  interpretation: |
+    AMI main-results pipeline. Trains the proposed
+    hierarchical_transformer router and the MLP-pool baseline on the
+    AMI parquet over 3 seeds (42, 2, 123). Together with the
+    training-free baselines (random, weighted-random, single-expert,
+    oracle) and ROVER variants computed by src.experiments.run, this
+    fills the AMI column of the manuscript Tab. II.
+
+  rationale: |
+    The proposed loss recipe (lambda_wer=1, lambda_hard=0.3,
+    lambda_soft=0.5, tau=1.5) was the active recipe at the time of
+    the v1 AMI run. The loss ablation v2 (configs/experiments/
+    ablation_loss_v2.yaml) revisits the choice with tau=0.1 and may
+    surface a different winner; once that ablation lands, this main
+    results config should be re-evaluated and a v2 main_results_ami
+    created if the loss recipe changes.
+
+  hypothesis: |
+    On AMI test we expect:
+      - Single base model (best of HuBERT/Whisper/W2V2): WER ~ 0.40
+      - Random / weighted random:                       WER ~ 0.40
+      - ROVER / weighted ROVER:                         WER ~ 0.35-0.37
+      - MLP-pool baseline:                              WER ~ 0.35-0.37
+      - Proposed (this method):                         WER ~ 0.31-0.33
+      - Oracle:                                         WER ~ 0.24
+    Proposed must beat MLP-pool by at least 0.02 WER on the mean over
+    3 seeds, otherwise the architecture's ROI is not justified by the
+    AMI numbers and the manuscript needs a softer claim.
+
+# ---------------------------------------------------------------------------
+
 _comment_: "Final manuscript experiment. Proposed model uses soft CE with a balanced aux loss. Baseline is standard MLP with Hard CE."
 parquet_path: "data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet"
 shared:
@@ -29,7 +68,7 @@ methods:
   - name: "hierarchical_transformer_proposed"
     arch: "hierarchical_transformer"
     primary_weight: 1.0
-    aux_ce_weight: 0.3     
+    aux_ce_weight: 0.3
     soft_ce_weight: 0.5
     soft_ce_temperature: 1.5
     class_balanced_loss: true

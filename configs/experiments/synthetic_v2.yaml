@@ -1,0 +1,92 @@
+experiment_metadata:
+  name: synthetic_v2
+  parent: synthetic
+  status: active
+  created: 2026-05-01
+  author: huseyin-karaca
+  deprecated_for: null
+
+  interpretation: |
+    The v1 synthetic config was a 2-epoch smoke run inheriting AMI-flavored
+    defaults. It established that the pipeline (data generation, training,
+    eval) is wired correctly, but the resulting numbers (final WER ~0.5
+    on the proposed router, far from converged) are not manuscript-grade.
+
+  rationale: |
+    For the manuscript Tab. I (synthetic regime-switch test results) we
+    need converged numbers with a non-trivial gap between MLP-pool and
+    the proposed router. We therefore:
+      (1) raise max_epochs from 2 -> 30 (matches src.experiments.sweep
+          default and is sufficient for the simple synthetic task);
+      (2) explicitly pin every shared field (precision, eager_load,
+          allow_tf32, early_stopping_patience, class_balanced_loss=false)
+          so this config does NOT silently inherit AMI-tuned values from
+          configs/config.yaml — the synthetic experiment has no
+          class-imbalance concept and runs comfortably in fp32 on CPU
+          for development and bf16 on GPU for the final run;
+      (3) average over 3 seeds (42, 2, 123) to report mean ± std,
+          matching the multi-seed convention used elsewhere; and
+      (4) keep the loss preset (lambda_wer=1, lambda_hard=0,
+          lambda_soft=0.5, tau=0.1) consistent with the manuscript
+          Section 4.4 ablation conclusion (WER+SoftCE wins) so the
+          synthetic experiment does not silently use a different
+          loss recipe than the real-world deliverables.
+
+  hypothesis: |
+    On the test split we expect:
+      - Random baseline:  WER >= 0.45 (R=4 per-pair WER table)
+      - MLP-pool router:  WER in [0.28, 0.36] (must beat random, but
+        cannot resolve the regime-switch from pooled features)
+      - Proposed router:  WER in [0.18, 0.25] (resolves regime-switch
+        via Stage-1 attention; selection_accuracy > 0.80)
+      - Oracle:           WER ~ 0.18
+    If proposed_router test WER is not at least 0.05 lower than
+    MLP-pool (mean over 3 seeds), the temporal-modeling claim of the
+    paper's Section 4.1 is not supported by the cleaned pipeline and
+    we must revisit the data generation noise scale.
+
+# ---------------------------------------------------------------------------
+
+parquet_path: "data/processed/synthetic_regime_switch/combined_features.parquet"
+skip_training_free: false
+skip_rover: true
+
+shared:
+  train_ratio: 0.8
+  val_ratio: 0.1
+  max_seq_len: 256
+  batch_size: 64
+  num_workers: 4
+  max_epochs: 30
+  learning_rate: 1e-4
+  weight_decay: 1e-2
+  warmup_steps: 200
+  primary_weight: 1.0
+  aux_ce_weight: 0.0
+  soft_ce_weight: 0.5
+  soft_ce_temperature: 0.1
+  label_smoothing: 0.1
+  class_balanced_loss: false
+  precision: "bf16-mixed"
+  eager_load: true
+  allow_tf32: false
+  early_stopping_patience: 8
+  test_average_epochs: 1
+
+methods:
+  - name: "synthetic_regime_switch_hier_v2"
+    arch: "hierarchical_transformer"
+    d_model: 256
+    n_heads: 4
+    stage1_layers: 2
+    stage2_layers: 1
+    ffn_dim: 512
+    dropout: 0.15
+    seed: [42, 2, 123]
+
+  - name: "synthetic_regime_switch_mlp_pool_v2"
+    arch: "mlp_pool"
+    mlp_hidden: 1024
+    mlp_layers: 2
+    dropout: 0.15
+    seed: [42, 2, 123]

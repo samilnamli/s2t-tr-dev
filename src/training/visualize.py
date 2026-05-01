@@ -31,28 +31,21 @@ Usage:
 
 import glob
 import json
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from loguru import logger
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import typer
 from torch.utils.data import DataLoader, random_split
-
-# Match the security-hardening override in src.training.train so checkpoints
-# we produced ourselves load without weights_only complaints.
-_orig_torch_load = torch.load
-def _torch_load_full(*args, **kwargs):
-    kwargs["weights_only"] = False
-    return _orig_torch_load(*args, **kwargs)
-torch.load = _torch_load_full
+import typer
 
 from src.data.dataset import MODEL_NAMES, ASRFeatureDataset, collate_fn
 from src.training.train import ASRSelectorModule
+from src.utils.checkpoint import legacy_torch_load
+from src.utils.logging import setup_unified_logging
 
-logger = logging.getLogger(__name__)
 app = typer.Typer(help="Post-hoc visualizations of trained ASR Model Selector checkpoints.")
 
 
@@ -245,10 +238,7 @@ def predictions(
     seed: int = typer.Option(42, "--seed"),
 ):
     """Compute predictions and per-checkpoint figures for one or more checkpoints."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_unified_logging(level="INFO")
     ckpts = _parse_named_options(ckpt, "ckpt")
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -263,21 +253,22 @@ def predictions(
         "cuda" if torch.cuda.is_available()
         else ("mps" if torch.backends.mps.is_available() else "cpu")
     )
-    logger.info("Device: %s; split=%s (n=%d)", device, split, len(split_ds))
+    logger.info("Device: {}; split={} (n={})", device, split, len(split_ds))
 
     metrics_by_name: Dict[str, Dict] = {}
     probs_by_name: Dict[str, np.ndarray] = {}
     wer_array: Optional[np.ndarray] = None
     for name, path in ckpts.items():
-        logger.info("=== checkpoint %s ← %s ===", name, path)
-        module = ASRSelectorModule.load_from_checkpoint(path, map_location=device)
+        logger.info("=== checkpoint {} <- {} ===", name, path)
+        with legacy_torch_load():
+            module = ASRSelectorModule.load_from_checkpoint(path, map_location=device)
         probs, wer = _collect_predictions(module, loader, device)
         if wer_array is None:
             wer_array = wer
         metrics = _per_checkpoint_metrics(probs, wer)
         metrics_by_name[name] = metrics
         probs_by_name[name] = probs
-        logger.info("  metrics: %s", json.dumps(metrics, indent=2))
+        logger.info("  metrics: {}", json.dumps(metrics, indent=2))
 
         cm = _confusion_matrix(probs, wer)
         fig, ax = plt.subplots(figsize=(4.6, 4.0))
@@ -312,7 +303,7 @@ def predictions(
     }
     with open(out / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
-    logger.info("Wrote figures and summary.json to %s", out)
+    logger.info("Wrote figures and summary.json to {}", out)
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +338,7 @@ def _read_scalar_series(logdir: str, tags: List[str]) -> Dict[str, Tuple[np.ndar
                     series[tag][0].append(int(s.step))
                     series[tag][1].append(float(s.value))
         except Exception as e:  # pragma: no cover - defensive
-            logger.warning("Could not read %s: %s", f, e)
+            logger.warning("Could not read {}: {}", f, e)
     return {tag: (np.asarray(s[0]), np.asarray(s[1])) for tag, s in series.items()}
 
 
@@ -371,17 +362,14 @@ def curves(
     ),
 ):
     """Overlay training curves from multiple TensorBoard log directories."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+    setup_unified_logging(level="INFO")
     runs = _parse_named_options(logdir, "logdir")
 
     series_by_run: Dict[str, Dict[str, Tuple[np.ndarray, np.ndarray]]] = {}
     for name, path in runs.items():
         series_by_run[name] = _read_scalar_series(path, tags)
         for tag, (steps, _) in series_by_run[name].items():
-            logger.info("  %s :: %s — %d points", name, tag, len(steps))
+            logger.info("  {} :: {} - {} points", name, tag, len(steps))
 
     n_panels = len(tags)
     fig, axes = plt.subplots(1, n_panels, figsize=(4.5 * n_panels, 3.6), squeeze=False)
@@ -412,7 +400,7 @@ def curves(
     if out.suffix.lower() == ".pdf":
         fig.savefig(out.with_suffix(".png"), bbox_inches="tight", dpi=150)
     plt.close(fig)
-    logger.info("Wrote curves figure to %s", out)
+    logger.info("Wrote curves figure to {}", out)
 
 
 if __name__ == "__main__":

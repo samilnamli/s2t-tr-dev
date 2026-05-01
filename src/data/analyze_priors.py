@@ -1,7 +1,8 @@
-import duckdb
 import argparse
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
+
+import duckdb
 
 logger = logging.getLogger(__name__)
 

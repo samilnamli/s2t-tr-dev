@@ -1,3 +1,33 @@
+experiment_metadata:
+  name: synthetic
+  parent: null
+  status: deprecated
+  created: 2026-04-26
+  author: huseyin-karaca
+  deprecated_for: synthetic_v2
+
+  interpretation: |
+    First scaffold of the synthetic regime-switch experiment. We
+    generated a regime-switch parquet (R=4 regimes, T=128 frames per
+    clip, asymmetric per-(r1,r2,k) WER table) and trained both the
+    proposed hierarchical transformer router and the MLP-pool
+    baseline against it for two epochs each. Convergence and pipeline
+    plumbing were the targets, not manuscript numbers.
+
+  rationale: |
+    Manuscript Section 4.1 needs (a) a single-R test result confirming
+    that frame-level routing beats pooled routing, and (b) a sweep
+    over R that quantifies how the temporal-modeling advantage scales.
+    This v1 file was sized for a smoke run (max_epochs=2) and inherits
+    several reasonable-sounding values from configs/config.yaml that
+    were actually tuned for AMI (precision, eager_load, etc.). It is
+    insufficient for the manuscript Tab. I.
+
+  hypothesis: |
+    Smoke-only. Hypothesis testing happens in the v2 successor.
+
+# ---------------------------------------------------------------------------
+
 _comment_: "Synthetic regime-switch experiment config. Compares the proposed hierarchical transformer router against the MLP-pool baseline."
 parquet_path: "data/processed/synthetic_regime_switch/combined_features.parquet"
 skip_rover: true

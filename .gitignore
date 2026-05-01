@@ -190,7 +190,28 @@ cython_debug/
 
 # PyPI configuration file
 .pypircmodels/
+
+# Trained checkpoints and saved models (artifacts, not source)
 /models/
 
+# Hydra default output dir (we set hydra.run.dir explicitly elsewhere,
+# but anything that lands here is run-local noise)
+outputs/
 
-wandb_compare.py
+# Lightning + custom training run logs (per-experiment subdirs, large)
+logs/
+
+# W&B local cache (runs are mirrored to the cloud; the local dir is regenerable)
+wandb/
+
+# LaTeX auxiliary build artifacts (only the source .tex/.bib and the rendered .pdf
+# are committed under reports/manuscript/)
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.log
+*.out
+reports/manuscript/latex_output/

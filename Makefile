@@ -15,8 +15,15 @@ PYTHON_INTERPRETER = uv run python
 .PHONY: requirements
 requirements:
 	uv sync
-	
 
+
+## Set up Python interpreter environment
+.PHONY: create_environment
+create_environment:
+	uv venv --python $(PYTHON_VERSION)
+	@echo ">>> New uv virtual environment created. Activate with:"
+	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
+	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
 
 
 ## Delete all compiled Python files
@@ -29,74 +36,100 @@ clean:
 ## Lint using ruff (use `make format` to do formatting)
 .PHONY: lint
 lint:
-	ruff format --check
-	ruff check
+	uv run ruff format --check
+	uv run ruff check
 
 ## Format source code with ruff
 .PHONY: format
 format:
-	ruff check --fix
-	ruff format
-
-
-
-
-
-## Set up Python interpreter environment
-.PHONY: create_environment
-create_environment:
-	uv venv --python $(PYTHON_VERSION)
-	@echo ">>> New uv virtual environment created. Activate with:"
-	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
-	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
-	
-
+	uv run ruff check --fix
+	uv run ruff format
 
 
 #################################################################################
-# PROJECT RULES                                                                 #
+# DATA                                                                          #
 #################################################################################
-
 
 ## Download processed AMI dataset from Google Drive
 .PHONY: download_ami
 download_ami:
 	uv run python -m src.data.get_processed -d ami
 
-## Download processed VoxPopuli dataset from Google Drive
+## Download processed VoxPopuli dataset from Google Drive (parked deliverable)
 .PHONY: download_voxpopuli
 download_voxpopuli:
 	uv run python -m src.data.get_processed -d voxpopuli
 
-## Run the main results pipeline for the AMI dataset
+
+#################################################################################
+# EXPERIMENTS                                                                   #
+#################################################################################
+#
+# Generic runner. The experiment YAML is the SSOT (see configs/README.md).
+# Usage:
+#   make run_experiment EXPERIMENT=ablation_loss
+#   make run_experiment EXPERIMENT=ablation_architecture
+#   make run_experiment EXPERIMENT=synthetic
+#   make run_experiment EXPERIMENT=main_results_ami
+#
+
+EXPERIMENT ?=
+
+## Run any experiment by name (set EXPERIMENT=<name>)
+.PHONY: run_experiment
+run_experiment:
+	@if [ -z "$(EXPERIMENT)" ]; then \
+		echo "ERROR: EXPERIMENT is unset. Usage: make run_experiment EXPERIMENT=ablation_loss"; \
+		exit 1; \
+	fi
+	uv run python -m src.experiments.run experiments=$(EXPERIMENT)
+
+
+## Render manuscript table for a finished experiment (set EXPERIMENT=<name>)
+.PHONY: render_table
+render_table:
+	@if [ -z "$(EXPERIMENT)" ]; then \
+		echo "ERROR: EXPERIMENT is unset."; exit 1; \
+	fi
+	uv run python -m src.reporting.tables render \
+		--results reports/main_results/$(EXPERIMENT)/main_results.json \
+		--output-dir reports/manuscript/figures/auto/$(EXPERIMENT)
+
+
+## Render manuscript figures for a finished experiment (set EXPERIMENT=<name>)
+.PHONY: render_figures
+render_figures:
+	@if [ -z "$(EXPERIMENT)" ]; then \
+		echo "ERROR: EXPERIMENT is unset."; exit 1; \
+	fi
+	uv run python -m src.reporting.figures render \
+		--results reports/main_results/$(EXPERIMENT)/main_results.json \
+		--output-dir reports/manuscript/figures/auto/$(EXPERIMENT)
+
+
+#################################################################################
+# DEPRECATED ALIASES (kept for back-compat with parked notebooks; remove later) #
+#################################################################################
+
 .PHONY: run_main_results_ami
 run_main_results_ami:
-	uv run python -m src.experiments.main_results experiments=main_results_ami
+	$(MAKE) run_experiment EXPERIMENT=main_results_ami
 
-## Run the main results pipeline for the VoxPopuli dataset
 .PHONY: run_main_results_voxpopuli
 run_main_results_voxpopuli:
-	uv run python -m src.experiments.main_results experiments=main_results_voxpopuli
+	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli
 
-## Run the main results pipeline for the VoxPopuli dataset V2
 .PHONY: run_main_results_voxpopuli_v2
 run_main_results_voxpopuli_v2:
-	uv run python -m src.experiments.main_results experiments=main_results_voxpopuli_v2
+	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli_v2
 
-## Run the main results pipeline for the VoxPopuli dataset V3
 .PHONY: run_main_results_voxpopuli_v3
 run_main_results_voxpopuli_v3:
-	uv run python -m src.experiments.main_results experiments=main_results_voxpopuli_v3
+	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli_v3
 
-## Run the main results pipeline for the VoxPopuli dataset V4 (Dynamic Class Balanced Loss)
 .PHONY: run_main_results_voxpopuli_v4
 run_main_results_voxpopuli_v4:
-	uv run python -m src.experiments.main_results experiments=main_results_voxpopuli_v4
-
-## Make dataset
-.PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) src/dataset.py
+	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli_v4
 
 
 #################################################################################
@@ -115,4 +148,4 @@ endef
 export PRINT_HELP_PYSCRIPT
 
 help:
-	@$(PYTHON_INTERPRETER) -c "${PRINT_HELP_PYSCRIPT}" < $(MAKEFILE_LIST)
+	@$(PYTHON_INTERPRETER) -c "$${PRINT_HELP_PYSCRIPT}" < $(MAKEFILE_LIST)

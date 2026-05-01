@@ -1,3 +1,32 @@
+experiment_metadata:
+  name: ablation_loss
+  parent: null
+  status: deprecated
+  created: 2026-05-01
+  author: huseyin-karaca
+  deprecated_for: ablation_loss_v2
+
+  interpretation: |
+    First version of the loss ablation on AMI. The four methods test
+    each loss component in isolation plus the proposed combination.
+    Single seed (42) per method, 50 max epochs, class_balanced_loss
+    enabled (correctly dynamic since the train.py refactor).
+
+  rationale: |
+    Insufficient for Tab. III as written. The manuscript reports the
+    "WER + Soft CE" winner with soft_ce_temperature tau = 0.1, but
+    this v1 file uses tau = 1.5 for "loss_proposed" and "loss_soft_ce_only".
+    The 0.1 vs 1.5 choice changes the soft target from "near-hard pointer
+    at the oracle expert" to "smooth proportional target across the WER
+    vector" — these are qualitatively different gradients and need
+    separate columns in the manuscript.
+
+  hypothesis: |
+    Superseded by v2. v1 results are kept only as lineage; do not
+    promote them to the manuscript.
+
+# ---------------------------------------------------------------------------
+
 _comment_: "Loss ablation. Tests the impact of the primary weighted WER loss, hard CE, and soft CE."
 parquet_path: "data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet"
 skip_rover: true
