@@ -150,6 +150,12 @@ def run(cfg: DictConfig):
     shared = OmegaConf.to_container(pipeline.get("shared", {}), resolve=True)
     raw_methods = OmegaConf.to_container(pipeline.get("methods", []), resolve=True)
 
+    import sys
+    config_name = "main_results"
+    for arg in sys.argv:
+        if arg.startswith("experiments="):
+            config_name = arg.split("=")[1]
+
     # Automatically expand methods with multiple seeds
     methods = []
     for method in raw_methods:
@@ -217,7 +223,8 @@ def run(cfg: DictConfig):
         train_flags = [
             f"parquet_path={parquet_path}",
             f"experiment_name={name}",
-            f"log_dir={out_root}"
+            f"log_dir={out_root}",
+            f"wandb_group={config_name}"
         ]
         for k, v in merged.items():
             if v is True:

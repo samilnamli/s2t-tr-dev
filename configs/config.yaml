@@ -51,6 +51,7 @@ early_stopping_patience: 5
 deterministic: false
 seed: 42
 limit_batches: null
+wandb_group: null
 
 # Checkpointing / Testing
 test_average_epochs: 1

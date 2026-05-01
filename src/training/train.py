@@ -454,6 +454,7 @@ def train(cfg: DictConfig):
     wandb_logger = WandbLogger(
         project="s2t-tr-dev",
         name=cfg.experiment_name,
+        group=cfg.get("wandb_group"),
         save_dir=cfg.log_dir,
         config=OmegaConf.to_container(cfg, resolve=True)
     )
