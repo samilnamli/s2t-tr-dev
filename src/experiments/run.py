@@ -7,9 +7,10 @@ experiment YAML in ``configs/experiments/<name>.yaml``:
 
     1. Optionally compute training-free baselines via
        :mod:`src.training.eval_baselines` (skipped when
-       ``cfg.skip_training_free=true``).
+       ``skip_training_free=true``, read from the experiment YAML
+       first then the top-level config).
     2. Optionally compute ROVER and weighted ROVER via
-       :mod:`src.training.rover` (skipped when ``cfg.skip_rover=true``,
+       :mod:`src.training.rover` (skipped when ``skip_rover=true``,
        e.g. for the synthetic experiment which has no transcripts).
     3. For every entry in ``cfg.experiments.methods``, train the
        declared variant via :mod:`src.training.train`. Multi-seed
@@ -108,6 +109,15 @@ def main(cfg: DictConfig) -> None:
     raw_methods = OmegaConf.to_container(pipeline.get("methods", []), resolve=True)
     metadata = OmegaConf.to_container(pipeline.get("experiment_metadata", {}), resolve=True)
 
+    # Skip flags MUST be read from the experiment block first, falling back
+    # to the top-level default in configs/config.yaml. Reading only
+    # cfg.skip_* loses any override declared inside the experiment YAML
+    # (e.g. synthetic_v2 sets skip_rover=true because it has no transcripts).
+    skip_training_free = bool(
+        pipeline.get("skip_training_free", cfg.get("skip_training_free", False))
+    )
+    skip_rover = bool(pipeline.get("skip_rover", cfg.get("skip_rover", False)))
+
     config_name = _config_name_from_argv()
     methods = expand_seeds(raw_methods)
 
@@ -128,7 +138,9 @@ def main(cfg: DictConfig) -> None:
     split_args = {k: shared[k] for k in ("train_ratio", "val_ratio", "seed") if k in shared}
 
     baselines_json = out_root / "baselines.json"
-    if not cfg.get("skip_training_free", False):
+    if skip_training_free:
+        logger.info("skip_training_free=true — skipping eval_baselines step.")
+    else:
         run(
             python_module(
                 "src.training.eval_baselines",
@@ -144,7 +156,9 @@ def main(cfg: DictConfig) -> None:
         )
 
     rover_json = out_root / "rover.json"
-    if not cfg.get("skip_rover", False):
+    if skip_rover:
+        logger.info("skip_rover=true — skipping ROVER step (synthetic data has no transcripts).")
+    else:
         run(
             python_module(
                 "src.training.rover",

@@ -49,6 +49,13 @@ _NOISY_LOGGER_PREFIXES: tuple[str, ...] = (
     "filelock",
     "fsspec",
     "asyncio",
+    # torch internals dump cache stats / fake tensor traces at INFO and
+    # are noise for our work. We silence the specific subloggers known
+    # to chatter, not bare "torch", so genuinely useful torch warnings
+    # (cudnn, autograd anomalies) still surface.
+    "torch._subclasses",
+    "torch._inductor",
+    "torch._dynamo",
 )
 
 
