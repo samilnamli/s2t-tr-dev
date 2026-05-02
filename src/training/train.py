@@ -424,7 +424,7 @@ def train(cfg: DictConfig):
         monitor="val/selected_wer",
         mode="min",
         save_top_k=save_top_k,
-        save_last=True,
+        save_last=False,
     )
     callbacks = [
         checkpoint_callback,
@@ -450,7 +450,7 @@ def train(cfg: DictConfig):
         project="s2t-tr-dev",
         name=cfg.experiment_name,
         group=cfg.get("wandb_group"),
-        save_dir=cfg.log_dir,
+        save_dir=os.path.join(cfg.log_dir, cfg.experiment_name),
         log_model="best",
         save_code=True,
         config=cfg_dict,
@@ -512,11 +512,15 @@ def train(cfg: DictConfig):
     # Per-checkpoint metrics. We disable the W&B logger on the trainer for
     # the per-checkpoint passes so the W&B run summary contains only the
     # final averaged result (one row per model = clean dashboards).
-    trainer_for_test = pl.Trainer(
+    test_trainer_kwargs = dict(
         accelerator="auto", devices=1,
         precision=cfg.precision, logger=False,
         enable_progress_bar=is_tty,
     )
+    if cfg.limit_batches is not None:
+        test_trainer_kwargs["limit_test_batches"] = cfg.limit_batches
+
+    trainer_for_test = pl.Trainer(**test_trainer_kwargs)
     all_metrics = []
     with legacy_torch_load():
         for ckpt in ckpts_to_test:

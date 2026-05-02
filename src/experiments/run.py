@@ -28,6 +28,7 @@ Usage:
 
 from __future__ import annotations
 
+import datetime
 import json
 from pathlib import Path
 import sys
@@ -119,9 +120,22 @@ def main(cfg: DictConfig) -> None:
     skip_rover = bool(pipeline.get("skip_rover", cfg.get("skip_rover", False)))
 
     config_name = _config_name_from_argv()
+    
+    run_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    if "/" in config_name:
+        group_name, version_name = config_name.split("/", 1)
+        experiment_id = f"{group_name}_{version_name}"
+    else:
+        group_name = config_name
+        experiment_id = config_name
+        
+    wandb_group = experiment_id
+        
     methods = expand_seeds(raw_methods)
 
-    out_root = Path(cfg.get("output_dir", "reports") or "reports") / "main_results" / config_name
+    base_log_dir = Path(cfg.get("log_dir", "logs"))
+    out_root = base_log_dir / group_name / experiment_id
     out_root.mkdir(parents=True, exist_ok=True)
 
     if metadata:
@@ -185,29 +199,32 @@ def main(cfg: DictConfig) -> None:
         "methods": {},
     }
 
-    log_dir = Path(cfg.get("log_dir", "logs"))
     for method in methods:
         name = method["name"]
+        run_name = f"{experiment_id}_{name}-{run_timestamp}"
+        
         logger.info("=" * 60)
-        logger.info("Method: {}", name)
+        logger.info("Method: {}", run_name)
         logger.info("=" * 60)
-        run_dir = log_dir / name
+        run_dir = out_root / run_name
         run_dir.mkdir(parents=True, exist_ok=True)
         merged = {**shared, **{k: v for k, v in method.items() if k != "name"}}
 
         train_overrides = {
             "parquet_path": parquet_path,
-            "experiment_name": name,
-            "log_dir": str(log_dir),
-            "wandb_group": config_name,
+            "experiment_name": run_name,
+            "log_dir": str(out_root),
+            "wandb_group": wandb_group,
+            "hydra.run.dir": str(run_dir),
+            "hydra.output_subdir": ".hydra",
             **merged,
         }
         run(
             python_module("src.training.train", *hydra_overrides(train_overrides)),
-            description=f"train method={name}",
+            description=f"train method={run_name}",
         )
 
-        test_json = log_dir / name / "test_results.json"
+        test_json = run_dir / "test_results.json"
         if not test_json.exists():
             logger.warning("No test_results.json for {}; skipping aggregation.", name)
             continue

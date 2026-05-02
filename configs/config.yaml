@@ -21,8 +21,9 @@ defaults:
 hydra:
   job:
     chdir: false
+  output_subdir: null
   run:
-    dir: ${log_dir}/${experiment_name}/.hydra/${now:%Y-%m-%d_%H-%M-%S}
+    dir: .
   sweep:
     dir: ${log_dir}/${experiment_name}/.hydra/sweep_${now:%Y-%m-%d_%H-%M-%S}
     subdir: ${hydra.job.num}
