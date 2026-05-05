@@ -8,7 +8,9 @@
       "Bash(python3 -c ' *)",
       "Bash(python3 /tmp/gen_notebooks.py)",
       "Bash(uv run *)",
-      "Bash(uv run python -c ' *)"
+      "Bash(uv run python -c ' *)",
+      "Bash(grep -E \"\\\\.py$|^d\")",
+      "Bash(xargs ls *)"
     ]
   }
 }

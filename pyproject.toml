@@ -34,6 +34,7 @@ dependencies = [
     "omegaconf>=2.3.0",
     "pandas",
     "pip",
+    "pytest>=9.0.3",
     "python-dotenv",
     "pytorch-lightning>=2.6.1",
     "ruff",
@@ -48,6 +49,11 @@ dependencies = [
 ]
 requires-python = "~=3.10.0"
 
+
+[tool.pytest.ini_options]
+markers = [
+    "dagshub: integration tests that hit DagsHub (require DAGSHUB_USER_TOKEN env var)",
+]
 
 [tool.ruff]
 line-length = 99
