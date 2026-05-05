@@ -10,7 +10,10 @@
       "Bash(uv run *)",
       "Bash(uv run python -c ' *)",
       "Bash(grep -E \"\\\\.py$|^d\")",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(python -c ' *)",
+      "Bash(python run.py --cfg job)",
+      "Bash(python run.py experiment.trainer.max_epochs=1 experiment.data.batch_size=8 experiment.data.num_workers=0 experiment.data.eager_load=false)"
     ]
   }
 }

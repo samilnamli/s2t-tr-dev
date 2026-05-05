@@ -71,6 +71,11 @@ WER_COLUMNS: Dict[str, str] = {
     "whisper":  "whisper_wer",
     "wav2vec2": "w2v2_wer",
 }
+TRANSCRIPTION_COLUMNS: Dict[str, str] = {
+    "hubert":   "hubert_transcription",
+    "whisper":  "whisper_transcription",
+    "wav2vec2": "w2v2_transcription",
+}
 
 DEFAULT_ROW_GROUP_CACHE_SIZE = 4
 
@@ -164,6 +169,26 @@ class ASRFeatureDataset(Dataset):
             [wer_table[c].to_numpy().astype(np.float32) for c in wer_cols],
             axis=-1,
         )
+
+        # Load ground_truth and transcriptions upfront if available (they are strings,
+        # so memory cost is negligible compared to the feature buffers).
+        schema_names = set(pq.read_schema(self.parquet_path).names)
+        self._has_text = "ground_truth" in schema_names
+        self.ground_truth: Optional[List[str]] = None
+        self.transcriptions: Optional[Dict[str, List[str]]] = None
+        if self._has_text:
+            text_cols = ["ground_truth"] + [
+                TRANSCRIPTION_COLUMNS[n]
+                for n in MODEL_NAMES
+                if TRANSCRIPTION_COLUMNS[n] in schema_names
+            ]
+            text_table = pq.read_table(self.parquet_path, columns=text_cols)
+            self.ground_truth = text_table["ground_truth"].to_pylist()
+            self.transcriptions = {
+                name: text_table[TRANSCRIPTION_COLUMNS[name]].to_pylist()
+                for name in MODEL_NAMES
+                if TRANSCRIPTION_COLUMNS[name] in schema_names
+            }
 
         if self.eager_load:
             logger.info("Eager loading full parquet into flat float16 numpy buffers...")
@@ -328,14 +353,21 @@ class ASRFeatureDataset(Dataset):
                 hidden_states[name] = torch.from_numpy(emb)
                 seq_lens[name] = emb.shape[0]
 
-        wer_scores = torch.from_numpy(self.wer_matrix[idx])
+        wer_matrix = torch.from_numpy(self.wer_matrix[idx])
 
-        return {
+        sample: dict = {
             "hidden_states": hidden_states,
             "seq_lens": seq_lens,
-            "wer_scores": wer_scores,
+            "wer_matrix": wer_matrix,
             "sample_id": idx,
         }
+        if self._has_text:
+            sample["ground_truth"] = self.ground_truth[idx]
+            sample["transcription"] = {
+                name: self.transcriptions[name][idx]
+                for name in self.transcriptions
+            }
+        return sample
 
 
 def collate_fn(batch: List[dict]) -> dict:
@@ -346,10 +378,13 @@ def collate_fn(batch: List[dict]) -> dict:
 
     Returns:
         Dict with:
-            hidden_states: Dict[model_name, (B, T_max_k, D_k)].
-            attention_masks: Dict[model_name, (B, T_max_k) bool], True where valid.
-            wer_scores: (B, n_models) float tensor in :data:`MODEL_NAMES` order.
-            sample_ids: List of sample identifiers.
+            hidden_states:   Dict[model_name, (B, T_max_k, D_k)]
+            attention_masks: Dict[model_name, (B, T_max_k) bool], True where valid
+            wer_matrix:      (B, K) float — per-sample per-model WER
+            targets:         (B,) long  — argmin(wer_matrix, dim=-1)
+            ground_truth:    list[str] | None
+            transcription:   Dict[model_name, list[str]] | None
+            sample_ids:      list[int]
     """
     batch_size = len(batch)
     padded_hidden_states: Dict[str, torch.Tensor] = {}
@@ -363,15 +398,31 @@ def collate_fn(batch: List[dict]) -> dict:
         padded_hidden_states[name] = padded
 
         max_len = padded.shape[1]
-        mask = torch.arange(max_len).unsqueeze(0).expand(batch_size, -1) < lengths.unsqueeze(1)
+        mask = (
+            torch.arange(max_len).unsqueeze(0).expand(batch_size, -1)
+            < lengths.unsqueeze(1)
+        )
         attention_masks[name] = mask
 
-    wer_scores = torch.stack([b["wer_scores"] for b in batch])
+    wer_matrix = torch.stack([b["wer_matrix"] for b in batch])
+    targets = wer_matrix.argmin(dim=-1)
     sample_ids = [b["sample_id"] for b in batch]
+
+    ground_truth: Optional[List[str]] = None
+    transcription: Optional[Dict[str, List[str]]] = None
+    if "ground_truth" in batch[0]:
+        ground_truth = [b["ground_truth"] for b in batch]
+        transcription = {
+            name: [b["transcription"][name] for b in batch]
+            for name in batch[0]["transcription"]
+        }
 
     return {
         "hidden_states": padded_hidden_states,
         "attention_masks": attention_masks,
-        "wer_scores": wer_scores,
+        "wer_matrix": wer_matrix,
+        "targets": targets,
+        "ground_truth": ground_truth,
+        "transcription": transcription,
         "sample_ids": sample_ids,
     }

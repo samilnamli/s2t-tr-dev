@@ -1,10 +1,14 @@
-# configs/config.yaml
-defaults:
-  - data: ami               # configs/data/ami.yaml dosyasını seç
-  - model: mlp_pool         # configs/model/mlp_pool.yaml dosyasını seç
-  - trainer: default        # configs/trainer/default.yaml dosyasını seç
-  - _self_                  # Kendi içindeki override'lara öncelik ver
+# Root Hydra config.
+#
+# Usage:
+#   python run.py experiment=ami_main_results
+#   python run.py experiment=ami_main_results experiment.trainer.max_epochs=2
+#   python run.py mlflow.tracking_uri=http://localhost:5000
 
-# İstersen genel proje ayarlarını buraya yazabilirsin
-project_name: "ASR_Model_Selector"
-seed: 42
+defaults:
+  - experiment: ami_main_results
+  - _self_
+
+mlflow:
+  tracking_uri: mlruns
+  experiment_name: ASR_Model_Selector
