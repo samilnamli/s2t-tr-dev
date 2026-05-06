@@ -23,6 +23,9 @@ seed: 42 # data-split anchor (only used when fixed_data_split=true)
 seeds: [42, 0, 2] # (split, model) seeds — vary together by default
 fixed_data_split: false
 
+# Override the global root precision to medium for this specific test
+float32_matmul_precision: "medium"
+
 trainer:
   max_epochs: 50
   precision: bf16-mixed

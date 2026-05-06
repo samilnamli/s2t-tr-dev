@@ -17,6 +17,9 @@ seed: 42
 seeds: [42, 0, 2]
 fixed_data_split: false
 
+# Override the global root precision to medium for this specific test
+float32_matmul_precision: "medium"
+
 trainer:
   max_epochs: 2
   accelerator: auto

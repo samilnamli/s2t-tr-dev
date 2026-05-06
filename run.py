@@ -20,6 +20,7 @@ from __future__ import annotations
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
+import torch
 
 from src.utils.logging import setup_unified_logging
 from src.utils.mlflow_setup import setup_mlflow
@@ -31,6 +32,9 @@ def main(cfg: DictConfig) -> None:
     if "fmt" in cfg.logging:
         logging_kwargs["fmt"] = cfg.logging.fmt
     setup_unified_logging(**logging_kwargs)
+
+    precision = cfg.get("float32_matmul_precision", "high")
+    torch.set_float32_matmul_precision(precision)
 
     mlflow_cfg = OmegaConf.to_container(cfg.mlflow, resolve=True)
     if not mlflow_cfg.get("experiment_name"):

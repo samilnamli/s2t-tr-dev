@@ -11,6 +11,9 @@ defaults:
   - logging: default
   - _self_
 
+# "highest" (saf fp32, yavaş), "high" (tf32, hızlı), "medium" (bf16, en hızlı)
+float32_matmul_precision: "high"
+
 hydra:
   run:
     dir: /tmp/hydra/${now:%Y-%m-%d_%H-%M-%S}
