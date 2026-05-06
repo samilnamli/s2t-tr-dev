@@ -30,7 +30,12 @@ def _is_notebook() -> bool:
     if ip is None:
         return False
     # ZMQInteractiveShell = jupyter / colab; TerminalInteractiveShell = ipython tty.
-    return ip.__class__.__name__ == "ZMQInteractiveShell"
+    name = ip.__class__.__name__
+    if name == "ZMQInteractiveShell":
+        return True
+    if "google.colab" in str(ip.__class__):
+        return True
+    return False
 
 
 def make_progress_bar(refresh_rate: int = 50) -> pl.callbacks.Callback:

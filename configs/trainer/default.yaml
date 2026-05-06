@@ -3,12 +3,12 @@ max_epochs: 50
 accelerator: auto
 devices: auto
 deterministic: true
-log_every_n_steps: 50
+log_every_n_steps: 10
 enable_model_summary: false
 num_sanity_val_steps: 0
 precision: bf16-mixed
 callbacks:
   - _target_: src.utils.progress.make_progress_bar
-    refresh_rate: 50
+    refresh_rate: 10
   - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     logging_interval: epoch

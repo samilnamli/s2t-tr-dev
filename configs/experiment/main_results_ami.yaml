@@ -20,7 +20,7 @@ parent_run_name: v1
 # ``seed``, only model varies" behaviour — but expect the stat test to log a
 # warning that its assumptions are violated in that mode.
 seed: 42 # data-split anchor (only used when fixed_data_split=true)
-seeds: [42, 0, 1, 2] # (split, model) seeds — vary together by default
+seeds: [42, 0, 2] # (split, model) seeds — vary together by default
 fixed_data_split: false
 
 trainer:
@@ -41,6 +41,14 @@ stats:
       alpha: 0.05
 
 child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: hierarchical_transformer
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    class_balanced_loss: true
+    early_stopping_patience: 5
   - _target_: src.models.baselines.SingleModelBaseline
     name: single_hubert
     model_idx: 0
@@ -65,13 +73,5 @@ child_runs:
     primary_weight: 0.0
     aux_ce_weight: 1.0
     soft_ce_weight: 0.0
-    class_balanced_loss: true
-    early_stopping_patience: 5
-  - _target_: src.models.transformer.ASRModelSelectorLightning
-    name: hierarchical_transformer
-    primary_weight: 1.0
-    aux_ce_weight: 0.3
-    soft_ce_weight: 0.5
-    soft_ce_temperature: 1.5
     class_balanced_loss: true
     early_stopping_patience: 5
