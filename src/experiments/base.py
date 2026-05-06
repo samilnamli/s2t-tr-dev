@@ -170,11 +170,11 @@ class BaseExperiment(ABC):
 
         df = pd.DataFrame(rows).sort_values("wer_mean")
 
-        with mlflow.start_run(run_id=self.parent_run_id):
-            mlflow.log_table(
-                data=df,
-                artifact_file="results/test_wer_comparison.json",
-            )
+        # Parent run is still active when this is called — log directly.
+        mlflow.log_table(
+            data=df,
+            artifact_file="results/test_wer_comparison.json",
+        )
 
         # Also print to console for quick inspection
         print("\n=== Test WER Comparison ===")
