@@ -1,14 +1,24 @@
 # Root Hydra config.
 #
 # Usage:
-#   python run.py experiment=ami_main_results
-#   python run.py experiment=ami_main_results experiment.trainer.max_epochs=2
+#   python run.py experiment=main_results_ami
+#   python run.py experiment=main_results_ami trainer.max_epochs=2
 #   python run.py mlflow.tracking_uri=http://localhost:5000
 
 defaults:
-  - experiment: ami_main_results
+  - experiment: smoke
+  - mlflow: dagshub
+  - logging: default
   - _self_
 
-mlflow:
-  tracking_uri: mlruns
-  experiment_name: ASR_Model_Selector
+hydra:
+  run:
+    dir: /tmp/hydra/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: /tmp/hydra-sweeps/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+  output_subdir: null
+  job_logging:
+    root:
+      handlers: []
+    disable_existing_loggers: false

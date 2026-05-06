@@ -50,6 +50,7 @@ import logging
 from typing import Dict, List, Optional
 
 import numpy as np
+import pyarrow as pa
 import pyarrow.parquet as pq
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -62,18 +63,18 @@ logger = logging.getLogger(__name__)
 MODEL_NAMES: List[str] = ["hubert", "whisper", "wav2vec2"]
 
 FEATURE_COLUMNS: Dict[str, str] = {
-    "hubert":   "hubert_features",
-    "whisper":  "whisper_features",
+    "hubert": "hubert_features",
+    "whisper": "whisper_features",
     "wav2vec2": "w2v2_features",
 }
 WER_COLUMNS: Dict[str, str] = {
-    "hubert":   "hubert_wer",
-    "whisper":  "whisper_wer",
+    "hubert": "hubert_wer",
+    "whisper": "whisper_wer",
     "wav2vec2": "w2v2_wer",
 }
 TRANSCRIPTION_COLUMNS: Dict[str, str] = {
-    "hubert":   "hubert_transcription",
-    "whisper":  "whisper_transcription",
+    "hubert": "hubert_transcription",
+    "whisper": "whisper_transcription",
     "wav2vec2": "w2v2_transcription",
 }
 
@@ -111,33 +112,33 @@ class ASRFeatureDataset(Dataset):
         eager_load: bool = False,
     ):
         """Args:
-            parquet_path: Path to the unified combined parquet.
-            max_seq_len: Frame sequences longer than this are truncated.
-            cache_size: Number of row groups to keep decoded in memory
-                per worker process (lazy mode only). ``None`` picks
-                a sensible default (4) that handles random shuffled
-                access without blowing up RAM.
-            auto_rechunk: If True (default), stream-rewrite the input
-                parquet with small row groups to a local cache when
-                the source has too-large row groups. Fixes OOM kills
-                in lazy mode and bounds peak RAM during eager-mode
-                streaming decode.
-            target_row_group_size: Rows per row group when rechunking.
-            cache_dir: Where to write the rechunked file. Defaults to
-                a local-disk cache (see :func:`ensure_lazy_parquet`).
-            eager_load: If True, decode the entire feature parquet
-                into per-expert flat ``np.float32`` buffers + offsets
-                and serve all subsequent ``__getitem__`` calls from
-                RAM. Recommended on high-RAM hosts (e.g. cloud GPU
-                instances with 100+ GB system RAM). Eliminates per-
-                batch parquet decode, so training becomes GPU-bound.
-                Buffers are shared between DataLoader workers via
-                fork+COW. Estimated RAM ≈ sum_k(N * mean_T * D_k * 4 B);
-                a memory estimate is logged after loading.
+        parquet_path: Path to the unified combined parquet.
+        max_seq_len: Frame sequences longer than this are truncated.
+        cache_size: Number of row groups to keep decoded in memory
+            per worker process (lazy mode only). ``None`` picks
+            a sensible default (4) that handles random shuffled
+            access without blowing up RAM.
+        auto_rechunk: If True (default), stream-rewrite the input
+            parquet with small row groups to a local cache when
+            the source has too-large row groups. Fixes OOM kills
+            in lazy mode and bounds peak RAM during eager-mode
+            streaming decode.
+        target_row_group_size: Rows per row group when rechunking.
+        cache_dir: Where to write the rechunked file. Defaults to
+            a local-disk cache (see :func:`ensure_lazy_parquet`).
+        eager_load: If True, decode the entire feature parquet
+            into per-expert flat ``np.float32`` buffers + offsets
+            and serve all subsequent ``__getitem__`` calls from
+            RAM. Recommended on high-RAM hosts (e.g. cloud GPU
+            instances with 100+ GB system RAM). Eliminates per-
+            batch parquet decode, so training becomes GPU-bound.
+            Buffers are shared between DataLoader workers via
+            fork+COW. Estimated RAM ≈ sum_k(N * mean_T * D_k * 4 B);
+            a memory estimate is logged after loading.
         """
         self.source_parquet_path = str(parquet_path)
         self.eager_load = bool(eager_load)
-        
+
         if self.eager_load:
             self.parquet_path = self.source_parquet_path
         else:
@@ -147,7 +148,7 @@ class ASRFeatureDataset(Dataset):
                 cache_dir=cache_dir,
                 auto_rechunk=auto_rechunk,
             )
-            
+
         self.max_seq_len = max_seq_len
 
         self._pq_file: Optional[pq.ParquetFile] = None
@@ -192,69 +193,80 @@ class ASRFeatureDataset(Dataset):
 
         if self.eager_load:
             logger.info("Eager loading full parquet into flat float16 numpy buffers...")
-            table = pq.read_table(self.parquet_path, columns=[FEATURE_COLUMNS[n] for n in MODEL_NAMES])
-            
+            table = pq.read_table(
+                self.parquet_path, columns=[FEATURE_COLUMNS[n] for n in MODEL_NAMES]
+            )
+
             self._flat_buffers: Dict[str, np.ndarray] = {}
             self._frame_offsets: Dict[str, np.ndarray] = {}
             self._model_dims: Dict[str, int] = {}
-            
+
             for name in MODEL_NAMES:
                 col_name = FEATURE_COLUMNS[name]
-                
+
                 # To prevent PyArrow from crashing with "offset overflow" (2.1B limit)
                 # on huge 23GB files, we process the chunks manually instead of
                 # calling .combine_chunks() which tries to build a single giant array.
                 col_data = table[col_name]
-                
+
                 all_floats = []
                 all_offsets = [0]
                 current_offset = 0
                 D = None
-                
+
                 for chunk in col_data.chunks:
                     outer_offsets = chunk.offsets.to_numpy()
                     inner_arr = chunk.values
                     inner_offsets = inner_arr.offsets.to_numpy()
-                    
+
                     if D is None:
                         D = inner_offsets[1] - inner_offsets[0]
-                        
+
                     # Extract floats for this chunk and downcast to float16
                     chunk_floats = inner_arr.values.to_numpy(zero_copy_only=False)
                     if chunk_floats.dtype != np.float16:
                         chunk_floats = chunk_floats.astype(np.float16)
-                        
+
                     all_floats.append(chunk_floats)
-                    
+
                     # Update offsets (skip the first 0 of each chunk, add running offset)
                     shifted_offsets = outer_offsets[1:] + current_offset
                     all_offsets.extend(shifted_offsets.tolist())
-                    
+
                     current_offset += outer_offsets[-1]
-                    
+
                 flat_floats = np.concatenate(all_floats)
                 final_offsets = np.array(all_offsets, dtype=np.int64)
-                
+
                 self._flat_buffers[name] = flat_floats
                 self._frame_offsets[name] = final_offsets
                 self._model_dims[name] = D
-                
-            logger.info("Eager load complete. Flat buffer size per model: ~%.1f GB", 
-                        len(flat_floats) * 2 / (1024**3))
+
+            logger.info(
+                "Eager load complete. Flat buffer size per model: ~%.1f GB",
+                len(flat_floats) * 2 / (1024**3),
+            )
             self._pq_file = None
         else:
             self._read_row_group = lru_cache(maxsize=self._cache_size)(
                 self._read_row_group_uncached
             )
 
-        max_rg = (max(meta.row_group(i).num_rows for i in range(self.num_row_groups))
-                  if self.num_row_groups else 0)
+        max_rg = (
+            max(meta.row_group(i).num_rows for i in range(self.num_row_groups))
+            if self.num_row_groups
+            else 0
+        )
         mode = "EAGER (RAM-resident)" if self.eager_load else "LAZY (parquet)"
         logger.info(
             "Opened parquet %s (rows=%d, row_groups=%d, max_rg_rows=%d) — "
             "mode=%s, row-group cache size=%d.",
-            self.parquet_path, self.num_rows, self.num_row_groups, max_rg,
-            mode, self._cache_size,
+            self.parquet_path,
+            self.num_rows,
+            self.num_row_groups,
+            max_rg,
+            mode,
+            self._cache_size,
         )
         if self.parquet_path != self.source_parquet_path:
             logger.info(
@@ -309,9 +321,7 @@ class ASRFeatureDataset(Dataset):
         self.__dict__.update(state)
         if not self.eager_load:
             cache_size = self.__dict__.get("_cache_size", DEFAULT_ROW_GROUP_CACHE_SIZE)
-            self._read_row_group = lru_cache(maxsize=cache_size)(
-                self._read_row_group_uncached
-            )
+            self._read_row_group = lru_cache(maxsize=cache_size)(self._read_row_group_uncached)
 
     def __len__(self) -> int:
         return self.num_rows
@@ -319,20 +329,20 @@ class ASRFeatureDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         hidden_states: Dict[str, torch.Tensor] = {}
         seq_lens: Dict[str, int] = {}
-        
+
         if self.eager_load:
             for name in MODEL_NAMES:
                 start_frame = self._frame_offsets[name][idx]
-                end_frame = self._frame_offsets[name][idx+1]
+                end_frame = self._frame_offsets[name][idx + 1]
                 D = self._model_dims[name]
-                
+
                 emb = self._flat_buffers[name][start_frame * D : end_frame * D].reshape(-1, D)
                 # Cast back to float32 for PyTorch training stability
                 emb = emb.astype(np.float32)
-                
+
                 if emb.shape[0] > self.max_seq_len:
                     emb = emb[: self.max_seq_len]
-                
+
                 hidden_states[name] = torch.from_numpy(emb)
                 seq_lens[name] = emb.shape[0]
         else:
@@ -364,8 +374,7 @@ class ASRFeatureDataset(Dataset):
         if self._has_text:
             sample["ground_truth"] = self.ground_truth[idx]
             sample["transcription"] = {
-                name: self.transcriptions[name][idx]
-                for name in self.transcriptions
+                name: self.transcriptions[name][idx] for name in self.transcriptions
             }
         return sample
 
@@ -398,10 +407,7 @@ def collate_fn(batch: List[dict]) -> dict:
         padded_hidden_states[name] = padded
 
         max_len = padded.shape[1]
-        mask = (
-            torch.arange(max_len).unsqueeze(0).expand(batch_size, -1)
-            < lengths.unsqueeze(1)
-        )
+        mask = torch.arange(max_len).unsqueeze(0).expand(batch_size, -1) < lengths.unsqueeze(1)
         attention_masks[name] = mask
 
     wer_matrix = torch.stack([b["wer_matrix"] for b in batch])
@@ -413,8 +419,7 @@ def collate_fn(batch: List[dict]) -> dict:
     if "ground_truth" in batch[0]:
         ground_truth = [b["ground_truth"] for b in batch]
         transcription = {
-            name: [b["transcription"][name] for b in batch]
-            for name in batch[0]["transcription"]
+            name: [b["transcription"][name] for b in batch] for name in batch[0]["transcription"]
         }
 
     return {

@@ -1,8 +1,5 @@
 """Training-free ASR routing baselines.
 
-All classes inherit TrainingFreeBaseline from src.models.base and implement
-select(batch) -> np.ndarray(B,).
-
 Hierarchy
 ---------
 TrainingFreeBaseline (ABC)          – src.models.base
@@ -12,13 +9,10 @@ TrainingFreeBaseline (ABC)          – src.models.base
     WeightedRandomBaseline          – fit() learns priors from dm.wer_train_matrix
     ROVERBaseline
     WeightedROVERBaseline           – fit() learns priors from dm.wer_train_matrix
-
-SelectionMetrics  → src.utils.metrics (see there)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -29,71 +23,29 @@ from src.models.base import TrainingFreeBaseline
 from src.utils.rover import rover_combine
 
 
-# ---------------------------------------------------------------------------
-# Hydra structured configs
-# ---------------------------------------------------------------------------
+def _model_names(model_names: list[str] | None) -> list[str]:
+    return list(model_names) if model_names is not None else list(MODEL_NAMES)
 
-@dataclass
-class BaseBaselineConfig:
-    model_names: list[str] = field(default_factory=lambda: list(MODEL_NAMES))
-    seed: int = 42
-
-
-@dataclass
-class SingleModelBaselineConfig(BaseBaselineConfig):
-    _target_: str = "src.models.baselines.SingleModelBaseline"
-    name: str = "single_model"
-    model_idx: int = 0
-
-
-@dataclass
-class OracleBaselineConfig(BaseBaselineConfig):
-    _target_: str = "src.models.baselines.OracleBaseline"
-    name: str = "oracle"
-
-
-@dataclass
-class RandomBaselineConfig(BaseBaselineConfig):
-    _target_: str = "src.models.baselines.RandomBaseline"
-    name: str = "random"
-
-
-@dataclass
-class WeightedRandomBaselineConfig(BaseBaselineConfig):
-    _target_: str = "src.models.baselines.WeightedRandomBaseline"
-    name: str = "weighted_random"
-
-
-@dataclass
-class ROVERBaselineConfig(BaseBaselineConfig):
-    _target_: str = "src.models.baselines.ROVERBaseline"
-    name: str = "rover"
-
-
-@dataclass
-class WeightedROVERBaselineConfig(BaseBaselineConfig):
-    _target_: str = "src.models.baselines.WeightedROVERBaseline"
-    name: str = "weighted_rover"
-
-
-# ---------------------------------------------------------------------------
-# Concrete baselines
-# ---------------------------------------------------------------------------
 
 class SingleModelBaseline(TrainingFreeBaseline):
     """Always selects the same model."""
 
-    def __init__(self, model_idx: int = 0, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(
+        self, model_idx: int = 0, model_names: list[str] | None = None, seed: int = 42, **kwargs
+    ):
+        super().__init__(model_names=_model_names(model_names), seed=seed, **kwargs)
         self.model_idx = model_idx
 
     def select(self, batch: dict) -> np.ndarray:
-        N = batch["wer_matrix"].shape[0]
-        return np.full(N, self.model_idx, dtype=np.int64)
+        n = batch["wer_matrix"].shape[0]
+        return np.full(n, self.model_idx, dtype=np.int64)
 
 
 class OracleBaseline(TrainingFreeBaseline):
     """Selects the model with the lowest WER per sample (upper bound)."""
+
+    def __init__(self, model_names: list[str] | None = None, seed: int = 42, **kwargs):
+        super().__init__(model_names=_model_names(model_names), seed=seed, **kwargs)
 
     def select(self, batch: dict) -> np.ndarray:
         return batch["wer_matrix"].numpy().argmin(axis=-1).astype(np.int64)
@@ -102,20 +54,20 @@ class OracleBaseline(TrainingFreeBaseline):
 class RandomBaseline(TrainingFreeBaseline):
     """Selects a uniformly random model per sample."""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, model_names: list[str] | None = None, seed: int = 42, **kwargs):
+        super().__init__(model_names=_model_names(model_names), seed=seed, **kwargs)
         self._rng = np.random.default_rng(self.seed)
 
     def select(self, batch: dict) -> np.ndarray:
-        N = batch["wer_matrix"].shape[0]
-        return self._rng.integers(0, self.K, size=N)
+        n = batch["wer_matrix"].shape[0]
+        return self._rng.integers(0, self.K, size=n)
 
 
 class WeightedRandomBaseline(TrainingFreeBaseline):
     """Samples from a prior over model quality derived from training-split WER."""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, model_names: list[str] | None = None, seed: int = 42, **kwargs):
+        super().__init__(model_names=_model_names(model_names), seed=seed, **kwargs)
         self._rng = np.random.default_rng(self.seed)
         self.weights: Optional[np.ndarray] = None
 
@@ -128,18 +80,18 @@ class WeightedRandomBaseline(TrainingFreeBaseline):
     def select(self, batch: dict) -> np.ndarray:
         if self.weights is None:
             raise RuntimeError("Call fit(datamodule) before select().")
-        N = batch["wer_matrix"].shape[0]
-        return self._rng.choice(self.K, size=N, p=self.weights)
+        n = batch["wer_matrix"].shape[0]
+        return self._rng.choice(self.K, size=n, p=self.weights)
 
 
 class ROVERBaseline(TrainingFreeBaseline):
     """ROVER hypothesis combination with uniform system weights.
 
     Requires ``"transcription"`` key in the batch (dict[model_name, list[str]]).
-    The ``select`` return value is the index of the system closest to the
-    ROVER output — used to unify the interface. The meaningful metric is
-    the WER of the ROVER transcript itself, computed in evaluate().
     """
+
+    def __init__(self, model_names: list[str] | None = None, seed: int = 42, **kwargs):
+        super().__init__(model_names=_model_names(model_names), seed=seed, **kwargs)
 
     def fit(self, datamodule: pl.LightningDataModule, **_) -> None:
         pass
@@ -153,12 +105,11 @@ class ROVERBaseline(TrainingFreeBaseline):
         return rover_combine(batch["transcription"], self.model_names, weights)
 
     def _rover_select(self, batch: dict, weights: np.ndarray) -> np.ndarray:
-        """Proxy: index of the system whose hypothesis is closest to ROVER output."""
         import jiwer
 
         rover_hyps = rover_combine(batch["transcription"], self.model_names, weights)
-        N = len(rover_hyps)
-        dist = np.zeros((N, self.K), dtype=np.float32)
+        n = len(rover_hyps)
+        dist = np.zeros((n, self.K), dtype=np.float32)
         for k, name in enumerate(self.model_names):
             sys_hyps = batch["transcription"][name]
             for i, (rover_h, sys_h) in enumerate(zip(rover_hyps, sys_hyps)):
@@ -168,8 +119,8 @@ class ROVERBaseline(TrainingFreeBaseline):
         return dist.argmin(axis=-1).astype(np.int64)
 
     def evaluate(self, datamodule: pl.LightningDataModule) -> dict:
-        """Compute standard routing metrics; also WER of the ROVER transcript."""
         import jiwer
+
         from src.utils.metrics import SelectionMetrics
 
         datamodule.setup("test")
@@ -194,8 +145,8 @@ class ROVERBaseline(TrainingFreeBaseline):
 class WeightedROVERBaseline(ROVERBaseline):
     """ROVER with per-system weights derived from training-split WER."""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, model_names: list[str] | None = None, seed: int = 42, **kwargs):
+        super().__init__(model_names=_model_names(model_names), seed=seed, **kwargs)
         self.weights: Optional[np.ndarray] = None
 
     def fit(self, datamodule: pl.LightningDataModule, **_) -> None:

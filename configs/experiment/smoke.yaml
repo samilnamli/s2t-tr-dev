@@ -1,0 +1,43 @@
+# Tiny end-to-end smoke run on a runtime-generated synthetic parquet.
+# Usage:
+#   make smoke          # local file-store mlflow
+#   make run CONFIG=smoke
+defaults:
+  - /trainer: default
+  - /data: synthetic
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: smoke_v1
+seed: 0
+
+trainer:
+  max_epochs: 1
+  accelerator: cpu
+  devices: 1
+  precision: "32"
+  log_every_n_steps: 5
+
+data:
+  num_samples: 64
+  num_regimes: 2
+  frame_length: 32
+  regime_dim: 8
+  batch_size: 8
+  num_workers: 0
+  max_seq_len: 32
+  feature_dtype: float32
+
+child_runs:
+  - _target_: src.models.baselines.OracleBaseline
+    name: oracle
+  - _target_: src.models.baselines.RandomBaseline
+    name: random
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_pool
+    d_hidden: 64
+    n_layers: 1
+    primary_weight: 0.0
+    aux_ce_weight: 1.0
+    soft_ce_weight: 0.0
+    warmup_steps: 1

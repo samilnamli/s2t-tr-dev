@@ -1,35 +1,42 @@
 """Experiment entry point.
 
-Usage
------
-# AMI main results (all 10 child runs):
-    python run.py experiment=ami_main_results
+Examples
+--------
+    # AMI main results (all child runs):
+    python run.py experiment=main_results_ami
 
-# Quick smoke test on AMI with 2 epochs, lazy mode, small batch:
-    python run.py experiment=ami_main_results \\
-        experiment.trainer.max_epochs=2 \\
-        experiment.data.batch_size=8 \\
-        experiment.data.eager_load=false
+    # Quick smoke test:
+    python run.py experiment=smoke
 
-# Override MLflow tracking URI:
-    python run.py mlflow.tracking_uri=http://localhost:5000 \\
-                  mlflow.experiment_name=my_experiment
+    # CLI overrides flow through Hydra:
+    python run.py experiment=main_results_ami trainer.max_epochs=2 data.batch_size=8
+
+    # Override MLflow tracking URI (DagsHub by default if env is set):
+    python run.py mlflow.tracking_uri=http://localhost:5000
 """
 
-import hydra
-import mlflow
-from hydra.utils import instantiate
+from __future__ import annotations
 
-from src.experiments import RootConfig  # also registers all ConfigStore nodes
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig, OmegaConf
+
+from src.utils.logging import setup_unified_logging
+from src.utils.mlflow_setup import setup_mlflow
 
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="config")
-def main(cfg: RootConfig) -> None:
-    mlflow.set_tracking_uri(cfg.mlflow.tracking_uri)
-    mlflow.set_experiment(cfg.mlflow.experiment_name)
+def main(cfg: DictConfig) -> None:
+    setup_unified_logging(level=cfg.logging.level)
 
+    mlflow_cfg = OmegaConf.to_container(cfg.mlflow, resolve=True)
+    if not mlflow_cfg.get("experiment_name"):
+        mlflow_cfg["experiment_name"] = HydraConfig.get().runtime.choices.experiment
+    setup_mlflow(OmegaConf.create(mlflow_cfg))
+
+    from hydra.utils import instantiate
     experiment = instantiate(cfg.experiment, _recursive_=False)
-    experiment.run()
+    experiment.run(cfg.experiment)
 
 
 if __name__ == "__main__":

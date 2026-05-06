@@ -1,0 +1,43 @@
+# Ablation over the composite loss weights for the hierarchical transformer.
+# Only the proposed architecture is varied; data + trainer match main_results_ami.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: v1
+seed: 42
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_primary
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.0
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_hard_ce
+    primary_weight: 0.0
+    aux_ce_weight: 1.0
+    soft_ce_weight: 0.0
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_soft_ce
+    primary_weight: 0.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 1.0
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: primary_plus_hard
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.0
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: full_recipe
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5

@@ -49,7 +49,5 @@ class SelectionMetrics:
         result: dict = {}
         result.update(cls.wer_stats(selected_idx, wer_matrix))
         result.update(cls.selection_accuracy(selected_idx, wer_matrix))
-        result["selection_frequencies"] = cls.selection_frequencies(
-            selected_idx, model_names
-        )
+        result["selection_frequencies"] = cls.selection_frequencies(selected_idx, model_names)
         return result

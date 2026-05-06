@@ -1,0 +1,10 @@
+# DagsHub MLflow defaults. Auth picked up from env at runtime:
+#   DAGSHUB_USER_TOKEN  → MLFLOW_TRACKING_USERNAME/PASSWORD
+#   DAGSHUB_TRACKING_URI → tracking_uri (overrides this file)
+#
+# experiment_name is auto-derived from the chosen Hydra experiment group
+# when left null (e.g. ``experiment=main_results_ami`` → MLflow
+# experiment "main_results_ami").
+
+tracking_uri: null
+experiment_name: null

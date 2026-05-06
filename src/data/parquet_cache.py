@@ -118,9 +118,11 @@ def _rechunk_streaming(
     total_rows = src.metadata.num_rows
 
     logger.info(
-        "Rechunking parquet %s -> %s (rows=%d, src_row_groups=%d, "
-        "target_row_group_size=%d).",
-        src_path, dst_path, total_rows, src.metadata.num_row_groups,
+        "Rechunking parquet %s -> %s (rows=%d, src_row_groups=%d, target_row_group_size=%d).",
+        src_path,
+        dst_path,
+        total_rows,
+        src.metadata.num_row_groups,
         target_row_group_size,
     )
 
@@ -197,9 +199,10 @@ def ensure_lazy_parquet(
     threshold = max(target_row_group_size * large_row_group_ratio, target_row_group_size)
     if max_rg_rows <= threshold:
         logger.info(
-            "Parquet %s already has small row groups (max=%d rows ≤ threshold=%d); "
-            "using as-is.",
-            src, max_rg_rows, threshold,
+            "Parquet %s already has small row groups (max=%d rows ≤ threshold=%d); using as-is.",
+            src,
+            max_rg_rows,
+            threshold,
         )
         return str(src)
 
@@ -207,7 +210,10 @@ def ensure_lazy_parquet(
         logger.warning(
             "Parquet %s has huge row groups (max=%d rows; %d total rows in %d groups), "
             "but auto_rechunk=False. Lazy access may exhaust system RAM.",
-            src, max_rg_rows, n_rows, n_groups,
+            src,
+            max_rg_rows,
+            n_rows,
+            n_groups,
         )
         return str(src)
 
@@ -217,26 +223,36 @@ def ensure_lazy_parquet(
     if _is_fresh(cached, src):
         logger.info(
             "Reusing cached rechunked parquet %s (source max_rg_rows=%d > threshold=%d).",
-            cached, max_rg_rows, threshold,
+            cached,
+            max_rg_rows,
+            threshold,
         )
         return str(cached)
 
-    free_bytes = shutil.disk_usage(cache_root.parent if cache_root.parent.exists()
-                                   else Path("/")).free
+    free_bytes = shutil.disk_usage(
+        cache_root.parent if cache_root.parent.exists() else Path("/")
+    ).free
     src_bytes = src.stat().st_size
     if free_bytes < src_bytes * 1.2:
         logger.warning(
             "Not enough disk space at %s to cache a rechunked copy "
             "(need ~%.1f GB, have %.1f GB free). Falling back to original parquet — "
             "training may OOM if row groups are too large.",
-            cache_root, src_bytes / 1e9 * 1.2, free_bytes / 1e9,
+            cache_root,
+            src_bytes / 1e9 * 1.2,
+            free_bytes / 1e9,
         )
         return str(src)
 
     logger.warning(
         "Parquet %s has huge row groups (max=%d rows; %d total rows in %d groups). "
         "Rechunking to %s with row_group_size=%d for lazy random access.",
-        src, max_rg_rows, n_rows, n_groups, cached, target_row_group_size,
+        src,
+        max_rg_rows,
+        n_rows,
+        n_groups,
+        cached,
+        target_row_group_size,
     )
     _rechunk_streaming(src, cached, target_row_group_size)
     return str(cached)

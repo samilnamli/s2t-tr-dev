@@ -1,0 +1,52 @@
+# Synthetic regime-switch comparison — same routing methods as
+# main_results_*, but ROVER variants are skipped (transcriptions
+# are placeholder strings).
+
+defaults:
+  - /trainer: default
+  - /data: synthetic
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: synt_v1
+seed: 42
+
+trainer:
+  max_epochs: 30
+  precision: 32
+
+data:
+  num_samples: 10000
+  num_regimes: 4
+  frame_length: 128
+  batch_size: 128
+
+child_runs:
+  - _target_: src.models.baselines.SingleModelBaseline
+    name: single_hubert
+    model_idx: 0
+  - _target_: src.models.baselines.SingleModelBaseline
+    name: single_whisper
+    model_idx: 1
+  - _target_: src.models.baselines.SingleModelBaseline
+    name: single_wav2vec2
+    model_idx: 2
+  - _target_: src.models.baselines.RandomBaseline
+    name: random
+  - _target_: src.models.baselines.WeightedRandomBaseline
+    name: weighted_random
+  - _target_: src.models.baselines.OracleBaseline
+    name: oracle
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_pool_hard_ce
+    primary_weight: 0.0
+    aux_ce_weight: 1.0
+    soft_ce_weight: 0.0
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: hierarchical_transformer
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    class_balanced_loss: true

@@ -1,84 +1,51 @@
 """AMI DataModule.
 
-The parquet is expected at ``cfg.parquet_path`` (default:
-``data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet``).
-
-To generate it locally run::
-
-    python -m src.data.get_processed   # downloads from Google Drive
-    python -m src.data.preprocess      # builds the combined parquet
-
-This module only loads the parquet — it does not produce it.
+``prepare_data()`` ensures the AMI parquet exists. If missing, attempts
+to download a pre-computed parquet from Google Drive (when
+``auto_download=True``). Re-running ASR feature extraction from raw
+audio is GPU-bound and lives outside this DataModule.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-from src.data.base import ASRDataModule, ASRDataModuleConfig
+from loguru import logger
 
+from src.data.base import ASRDataModule
 
-AMI_DEFAULT_PARQUET = (
-    "data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet"
-)
-
-
-@dataclass
-class AMIDataModuleConfig(ASRDataModuleConfig):
-    _target_: str = "src.data.ami.AMIDataModule"
-    parquet_path: str = AMI_DEFAULT_PARQUET
-    # AMI-specific defaults (can be overridden via yaml/CLI)
-    train_ratio: float = 0.8
-    val_ratio: float = 0.1
-    batch_size: int = 128
-    num_workers: int = 4
-    max_seq_len: int = 2000
-    eager_load: bool = False   # set True on high-RAM GPU hosts
+AMI_DEFAULT_PARQUET = "data/processed/edinburghcstr_ami/combined_features_with_transcripts.parquet"
+AMI_DRIVE_FILE_ID = "1FgN4FQ422HPDCwG-Wl4jrXQGl0tgX6ZP"
 
 
 class AMIDataModule(ASRDataModule):
-    """ASRDataModule specialised for the AMI dataset.
-
-    prepare_data() raises a clear error if the parquet is missing, with
-    instructions on how to produce it.
-
-    TODO: optionally auto-download via src.data.get_processed when
-    ``auto_download=True`` is added to AMIDataModuleConfig.
-    """
+    """ASRDataModule specialised for the AMI dataset."""
 
     def __init__(
         self,
         parquet_path: str = AMI_DEFAULT_PARQUET,
-        train_ratio: float = 0.8,
-        val_ratio: float = 0.1,
-        batch_size: int = 128,
-        num_workers: int = 4,
-        max_seq_len: int = 2000,
-        eager_load: bool = False,
-        seed: int = 42,
+        auto_download: bool = True,
+        drive_file_id: str = AMI_DRIVE_FILE_ID,
         **kwargs,
     ):
-        super().__init__(
-            parquet_path=parquet_path,
-            train_ratio=train_ratio,
-            val_ratio=val_ratio,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            max_seq_len=max_seq_len,
-            eager_load=eager_load,
-            seed=seed,
-            **kwargs,
-        )
+        super().__init__(parquet_path=parquet_path, **kwargs)
+        self.auto_download = auto_download
+        self.drive_file_id = drive_file_id
 
     def prepare_data(self) -> None:
-        path = Path(self.cfg.parquet_path)
-        if not path.exists():
-            raise FileNotFoundError(
-                f"AMI parquet not found at: {path}\n\n"
-                "To produce it:\n"
-                "  1. python -m src.data.get_processed   # download from Google Drive\n"
-                "  2. python -m src.data.preprocess      # build combined parquet\n\n"
-                "Or point cfg.parquet_path to an existing file."
-            )
+        path = Path(self.parquet_path)
+        if path.exists():
+            return
+        if self.auto_download:
+            from src.data.downloads import download_drive_file
+
+            logger.info("AMI parquet missing — downloading from Google Drive ({})", path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            download_drive_file(self.drive_file_id, str(path))
+            if path.exists():
+                return
+        raise FileNotFoundError(
+            f"AMI parquet not found at {path} and auto_download did not succeed. "
+            "Either set auto_download=true with a valid drive_file_id, or place "
+            "the parquet at the configured path."
+        )

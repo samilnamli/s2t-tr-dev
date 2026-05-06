@@ -9,62 +9,28 @@ BaseSelector (ABC)
 
 from __future__ import annotations
 
-import tempfile
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+import math
+import tempfile
 from typing import Any, Optional
 
+import hydra
+import mlflow
 import numpy as np
+from omegaconf import DictConfig
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import MLFlowLogger
 import torch
 import torch.nn.functional as F
-from pytorch_lightning.loggers import MLFlowLogger
 
-import mlflow
-import hydra
-
-
-# ---------------------------------------------------------------------------
-# Hydra structured configs
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ChildRunConfig:
-    """Minimal config for a single child run. Concrete selectors extend this."""
-    name: str = "unnamed"
-    _target_: str = "src.models.base.TrainableLightningSelector"
-
-
-@dataclass
-class TrainerConfig:
-    """pl.Trainer config shared by all trainable child runs."""
-    _target_: str = "pytorch_lightning.Trainer"
-    max_epochs: int = 50
-    accelerator: str = "auto"
-    devices: str = "auto"
-    deterministic: bool = True
-    log_every_n_steps: int = 50
-    precision: str = "32"
-
-
-# ---------------------------------------------------------------------------
-# BaseSelector
-# ---------------------------------------------------------------------------
 
 class BaseSelector(ABC):
-    """Common interface for trainable and training-free ASR routers.
-
-    All subclasses expose:
-      - ``fit(datamodule, ...)``         — train or derive priors
-      - ``predict_proba(batch)``          — (B, K) soft probabilities
-      - ``select(batch)``                 — (B,) integer model indices
-      - ``evaluate(datamodule)``          — compute test-split metrics
-    """
+    """Common interface for trainable and training-free ASR routers."""
 
     def fit(
         self,
         datamodule: pl.LightningDataModule,
-        trainer_cfg: Optional[TrainerConfig] = None,
+        trainer_cfg: Optional[DictConfig] = None,
         mlflow_run_id: Optional[str] = None,
     ) -> None:
         """Default: no-op. Override in trainable / prior-learning subclasses."""
@@ -80,7 +46,6 @@ class BaseSelector(ABC):
         return probs.argmax(dim=-1).cpu().numpy()
 
     def evaluate(self, datamodule: pl.LightningDataModule) -> dict:
-        """Run select() over the test dataloader and return SelectionMetrics."""
         from src.utils.metrics import SelectionMetrics
 
         datamodule.setup("test")
@@ -95,26 +60,17 @@ class BaseSelector(ABC):
         return SelectionMetrics.compute_all(selected_idx, wer_matrix, model_names)
 
 
-# ---------------------------------------------------------------------------
-# TrainableLightningSelector
-# ---------------------------------------------------------------------------
-
 class TrainableLightningSelector(BaseSelector, pl.LightningModule):
-    """Abstract trainable selector.
+    """Abstract trainable selector with composite loss + AdamW + warmup-cosine LR.
 
     Subclasses implement ``forward(hidden_states, attention_masks) -> (B, K)``
-    returning *probabilities* (post-softmax).  Everything else — composite
-    loss, optimizer, logging, fit/evaluate orchestration — lives here.
+    returning post-softmax probabilities.
 
     Loss
     ----
     total = primary_weight  * weighted_wer
           + aux_ce_weight   * hard_cross_entropy(log p, argmin WER)
           + soft_ce_weight  * soft_cross_entropy(p, softmax(-wer / T))
-
-    Optimizer
-    ---------
-    AdamW + linear warmup → cosine annealing.
     """
 
     def __init__(
@@ -141,11 +97,9 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.warmup_steps = warmup_steps
-        # class_weights registered later via _init_class_weights()
         self.register_buffer("class_weights", None)
 
     def _init_class_weights(self, class_priors: list[float]) -> None:
-        """Call after datamodule.setup() when class_balanced_loss=True."""
         weights = torch.tensor(
             [1.0 / p if p > 0 else 0.0 for p in class_priors],
             dtype=torch.float32,
@@ -160,10 +114,6 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         attention_masks: dict[str, torch.Tensor],
     ) -> torch.Tensor:
         """Return (B, K) probability tensor."""
-
-    # ------------------------------------------------------------------
-    # Composite loss
-    # ------------------------------------------------------------------
 
     def _compute_loss(
         self, probs: torch.Tensor, wer_matrix: torch.Tensor
@@ -206,19 +156,15 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         }
         return total_loss, metrics
 
-    # ------------------------------------------------------------------
-    # Lightning steps
-    # ------------------------------------------------------------------
-
-    def training_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:
+    def training_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:  # noqa: ARG002
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
-        prog = {"total_loss", "selected_wer", "selection_accuracy"}
+        prog = {"total_loss"}
         for k, v in metrics.items():
-            self.log(f"train/{k}", v, on_step=True, on_epoch=True, prog_bar=(k in prog))
+            self.log(f"train/{k}", v, on_step=False, on_epoch=True, prog_bar=(k in prog))
         return loss
 
-    def validation_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:
+    def validation_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:  # noqa: ARG002
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
         prog = {"total_loss", "selected_wer", "selection_accuracy"}
@@ -226,7 +172,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
             self.log(f"val/{k}", v, on_epoch=True, prog_bar=(k in prog))
         return loss
 
-    def test_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:
+    def test_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:  # noqa: ARG002
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
         for k, v in metrics.items():
@@ -234,7 +180,6 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         return loss
 
     def predict_proba(self, batch: dict) -> torch.Tensor:
-        """Unpack batch and delegate to forward()."""
         with torch.no_grad():
             return self(batch["hidden_states"], batch["attention_masks"])
 
@@ -249,10 +194,8 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         def lr_lambda(step: int) -> float:
             if step < self.warmup_steps:
                 return step / max(1, self.warmup_steps)
-            progress = (step - self.warmup_steps) / max(
-                1, total_steps - self.warmup_steps
-            )
-            return 0.5 * (1.0 + torch.cos(torch.tensor(3.14159265 * progress)).item())
+            progress = (step - self.warmup_steps) / max(1, total_steps - self.warmup_steps)
+            return 0.5 * (1.0 + math.cos(math.pi * progress))
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
         return {
@@ -260,14 +203,10 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
             "lr_scheduler": {"scheduler": scheduler, "interval": "step", "frequency": 1},
         }
 
-    # ------------------------------------------------------------------
-    # BaseSelector.fit / evaluate overrides
-    # ------------------------------------------------------------------
-
     def fit(
         self,
         datamodule: pl.LightningDataModule,
-        trainer_cfg: Optional[TrainerConfig] = None,
+        trainer_cfg: Optional[DictConfig] = None,
         mlflow_run_id: Optional[str] = None,
     ) -> None:
         if self.class_balanced_loss and hasattr(datamodule, "class_priors"):
@@ -286,7 +225,6 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
             mode="min",
             save_top_k=1,
         )
-        lr_cb = pl.callbacks.LearningRateMonitor(logging_interval="step")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             if trainer_cfg is not None:
@@ -294,7 +232,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
                     trainer_cfg,
                     default_root_dir=tmp_dir,
                     logger=logger,
-                    callbacks=[checkpoint_cb, lr_cb],
+                    callbacks=[checkpoint_cb],
                 )
             else:
                 trainer = pl.Trainer(
@@ -302,7 +240,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
                     accelerator="auto",
                     default_root_dir=tmp_dir,
                     logger=logger,
-                    callbacks=[checkpoint_cb, lr_cb],
+                    callbacks=[checkpoint_cb],
                 )
             trainer.fit(self, datamodule=datamodule)
             test_results = trainer.test(self, datamodule=datamodule, ckpt_path="best")
@@ -310,12 +248,10 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         self._last_test_results = test_results[0] if test_results else {}
 
     def evaluate(self, datamodule: pl.LightningDataModule) -> dict:
-        """Return last test results from fit(); also compute selection metrics."""
         from src.utils.metrics import SelectionMetrics
 
         lightning_metrics = getattr(self, "_last_test_results", {})
 
-        # Also compute routing metrics
         datamodule.setup("test")
         all_idx, all_wer = [], []
         self.eval()
@@ -332,35 +268,28 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         return {**lightning_metrics, **routing_metrics}
 
 
-# ---------------------------------------------------------------------------
-# TrainingFreeBaseline base
-# ---------------------------------------------------------------------------
-
 class TrainingFreeBaseline(BaseSelector):
     """Base for training-free routing baselines.
 
-    Subclasses implement ``select(batch) -> np.ndarray`` returning (B,) indices.
+    Subclasses implement ``select(batch) -> np.ndarray(B,)``.
     ``predict_proba`` wraps select() as one-hot for interface uniformity.
     """
 
-    def __init__(self, model_names: list[str], seed: int = 42, **kwargs: Any):
+    def __init__(self, model_names: list[str], seed: int = 42, **_kwargs: Any):
         self.model_names = list(model_names)
         self.K = len(model_names)
         self.seed = seed
 
     def predict_proba(self, batch: dict) -> torch.Tensor:
         idx = self.select(batch)
-        B = len(idx)
-        one_hot = torch.zeros(B, self.K)
-        one_hot[torch.arange(B), torch.from_numpy(idx)] = 1.0
+        b = len(idx)
+        one_hot = torch.zeros(b, self.K)
+        one_hot[torch.arange(b), torch.from_numpy(idx)] = 1.0
         return one_hot
 
     @abstractmethod
     def select(self, batch: dict) -> np.ndarray:
         """Return (B,) integer array of selected model indices."""
-
-    def select_all(self, batches: list[dict]) -> np.ndarray:
-        return np.concatenate([self.select(b) for b in batches])
 
     def evaluate(self, datamodule: pl.LightningDataModule) -> dict:
         from src.utils.metrics import SelectionMetrics

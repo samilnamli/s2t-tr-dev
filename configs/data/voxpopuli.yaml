@@ -1,0 +1,10 @@
+_target_: src.data.voxpopuli.VoxPopuliDataModule
+parquet_path: data/processed/facebook_voxpopuli/combined_features_with_transcripts.parquet
+auto_download: true
+train_ratio: 0.8
+val_ratio: 0.1
+batch_size: 128
+num_workers: 4
+max_seq_len: 2000
+eager_load: false
+seed: 42

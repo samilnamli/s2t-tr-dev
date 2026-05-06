@@ -2,6 +2,13 @@
 /data/
 ! /data/*/.gitkeep
 
+# MLflow & Hydra outputs (all artefacts go to DagsHub MLflow)
+/mlruns/
+/outputs/
+.hydra/
+.repro_resolved_config.yaml
+/.parquet_cache/
+
 # Mac OS-specific storage files
 .DS_Store
 

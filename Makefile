@@ -1,149 +1,113 @@
-#################################################################################
-# GLOBALS                                                                       #
-#################################################################################
-
 PROJECT_NAME = s2t-tr-dev
 PYTHON_VERSION = 3.10
 PYTHON_INTERPRETER = uv run python
-
-#################################################################################
-# COMMANDS                                                                      #
-#################################################################################
-
-
-## Install Python dependencies
-.PHONY: requirements
-requirements:
-	uv sync
 
 
 ## Set up Python interpreter environment
 .PHONY: create_environment
 create_environment:
 	uv venv --python $(PYTHON_VERSION)
-	@echo ">>> New uv virtual environment created. Activate with:"
-	@echo ">>> Windows: .\\\\.venv\\\\Scripts\\\\activate"
-	@echo ">>> Unix/macOS: source ./.venv/bin/activate"
 
+## Install Python dependencies
+.PHONY: requirements
+requirements:
+	uv sync
 
-## Delete all compiled Python files
+## Delete compiled Python files
 .PHONY: clean
 clean:
 	find . -type f -name "*.py[co]" -delete
 	find . -type d -name "__pycache__" -delete
 
-
-## Lint using ruff (use `make format` to do formatting)
+## Lint with ruff
 .PHONY: lint
 lint:
 	uv run ruff format --check
 	uv run ruff check
 
-## Format source code with ruff
+## Format with ruff
 .PHONY: format
 format:
 	uv run ruff check --fix
 	uv run ruff format
 
 
-#################################################################################
-# DATA                                                                          #
-#################################################################################
+# ----------------------------------------------------------------------------
+# Run an experiment
+#   make run CONFIG=main_results_ami
+#   make run CONFIG=main_results_ami OVERRIDES="trainer.max_epochs=2 data.batch_size=8"
+# ----------------------------------------------------------------------------
 
-## Download processed AMI dataset from Google Drive
-.PHONY: download_ami
-download_ami:
-	uv run python -m src.data.get_processed -d ami
+CONFIG ?=
+OVERRIDES ?=
 
-## Download processed VoxPopuli dataset from Google Drive (parked deliverable)
-.PHONY: download_voxpopuli
-download_voxpopuli:
-	uv run python -m src.data.get_processed -d voxpopuli
-
-
-#################################################################################
-# EXPERIMENTS                                                                   #
-#################################################################################
-#
-# Generic runner. The experiment YAML is the SSOT (see configs/README.md).
-# Usage:
-#   make run_experiment EXPERIMENT=ablation_loss
-#   make run_experiment EXPERIMENT=ablation_architecture
-#   make run_experiment EXPERIMENT=synthetic
-#   make run_experiment EXPERIMENT=main_results_ami
-#
-
-EXPERIMENT ?=
-
-## Run any experiment by name (set EXPERIMENT=<name>)
-.PHONY: run_experiment
-run_experiment:
-	@if [ -z "$(EXPERIMENT)" ]; then \
-		echo "ERROR: EXPERIMENT is unset. Usage: make run_experiment EXPERIMENT=ablation_loss"; \
+## Run an experiment by name (CONFIG=<name>, optional OVERRIDES="k=v ...")
+.PHONY: run
+run:
+	@if [ -z "$(CONFIG)" ]; then \
+		echo "Usage: make run CONFIG=<name> [OVERRIDES=\"key=val ...\"]"; \
+		echo "Available: $$(ls configs/experiment | sed 's/.yaml$$//' | tr '\n' ' ')"; \
 		exit 1; \
 	fi
-	uv run python -m src.experiments.run experiments=$(EXPERIMENT)
+	$(PYTHON_INTERPRETER) run.py experiment=$(CONFIG) $(OVERRIDES)
 
 
-## Render manuscript table for a finished experiment (set EXPERIMENT=<name>)
-.PHONY: render_table
-render_table:
-	@if [ -z "$(EXPERIMENT)" ]; then \
-		echo "ERROR: EXPERIMENT is unset."; exit 1; \
+# ----------------------------------------------------------------------------
+# Local smoke test (runtime-generated synthetic parquet, max_epochs=1)
+# ----------------------------------------------------------------------------
+
+## Run the local end-to-end smoke test
+.PHONY: smoke
+smoke:
+	uv run pytest tests/test_smoke.py -v
+
+
+# ----------------------------------------------------------------------------
+# Materialize a dataset's parquet explicitly
+#   make prepare_data DATASET=ami
+#   make prepare_data DATASET=voxpopuli
+#   make prepare_data DATASET=synthetic
+# ----------------------------------------------------------------------------
+
+DATASET ?=
+
+## Materialize a dataset's parquet (DATASET=ami|voxpopuli|synthetic)
+.PHONY: prepare_data
+prepare_data:
+	@if [ -z "$(DATASET)" ]; then \
+		echo "Usage: make prepare_data DATASET=<ami|voxpopuli|synthetic>"; exit 1; \
 	fi
-	uv run python -m src.reporting.tables render \
-		--results reports/main_results/$(EXPERIMENT)/main_results.json \
-		--output-dir reports/manuscript/figures/auto/$(EXPERIMENT)
+	$(PYTHON_INTERPRETER) -m src.data.prepare --dataset $(DATASET)
 
 
-## Render manuscript figures for a finished experiment (set EXPERIMENT=<name>)
-.PHONY: render_figures
-render_figures:
-	@if [ -z "$(EXPERIMENT)" ]; then \
-		echo "ERROR: EXPERIMENT is unset."; exit 1; \
-	fi
-	uv run python -m src.reporting.figures render \
-		--results reports/main_results/$(EXPERIMENT)/main_results.json \
-		--output-dir reports/manuscript/figures/auto/$(EXPERIMENT)
+# ----------------------------------------------------------------------------
+# Reproduce a logged MLflow run (checkout commit + apply patch + re-run)
+#   make reproduce RUN_ID=<mlflow_run_id>
+#   make reproduce RUN_ID=<mlflow_run_id> FORCE=1   # allow dirty tree
+# ----------------------------------------------------------------------------
+
+RUN_ID ?=
+FORCE ?=
+
+## Reproduce a logged MLflow parent run by id
+.PHONY: reproduce
+reproduce:
+	@if [ -z "$(RUN_ID)" ]; then echo "Usage: make reproduce RUN_ID=<id> [FORCE=1]"; exit 1; fi
+	$(PYTHON_INTERPRETER) -m src.experiments.reproduce $(RUN_ID) $(if $(FORCE),--force,)
 
 
-#################################################################################
-# DEPRECATED ALIASES (kept for back-compat with parked notebooks; remove later) #
-#################################################################################
-
-.PHONY: run_main_results_ami
-run_main_results_ami:
-	$(MAKE) run_experiment EXPERIMENT=main_results_ami
-
-.PHONY: run_main_results_voxpopuli
-run_main_results_voxpopuli:
-	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli
-
-.PHONY: run_main_results_voxpopuli_v2
-run_main_results_voxpopuli_v2:
-	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli_v2
-
-.PHONY: run_main_results_voxpopuli_v3
-run_main_results_voxpopuli_v3:
-	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli_v3
-
-.PHONY: run_main_results_voxpopuli_v4
-run_main_results_voxpopuli_v4:
-	$(MAKE) run_experiment EXPERIMENT=main_results_voxpopuli_v4
-
-
-#################################################################################
-# Self Documenting Commands                                                     #
-#################################################################################
+# ----------------------------------------------------------------------------
+# Self-documenting help
+# ----------------------------------------------------------------------------
 
 .DEFAULT_GOAL := help
 
 define PRINT_HELP_PYSCRIPT
-import re, sys; \
-lines = '\n'.join([line for line in sys.stdin]); \
-matches = re.findall(r'\n## (.*)\n[\s\S]+?\n([a-zA-Z_-]+):', lines); \
-print('Available rules:\n'); \
-print('\n'.join(['{:25}{}'.format(*reversed(match)) for match in matches]))
+import re, sys
+lines = '\n'.join([line for line in sys.stdin])
+matches = re.findall(r'\n## (.*)\n[\s\S]+?\n([a-zA-Z_-]+):', lines)
+print('Available rules:\n')
+print('\n'.join(['{:25}{}'.format(*reversed(m)) for m in matches]))
 endef
 export PRINT_HELP_PYSCRIPT
 

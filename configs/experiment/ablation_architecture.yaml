@@ -1,0 +1,45 @@
+# Ablation over the hierarchical transformer's structural choices.
+# Loss recipe matches the proposed full_recipe.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: v1
+seed: 42
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: no_cross_attn_no_share
+    use_cross_attention_bridge: false
+    share_stage1_weights: false
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: no_cross_attn
+    use_cross_attention_bridge: false
+    share_stage1_weights: true
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: no_share_stage1
+    use_cross_attention_bridge: true
+    share_stage1_weights: false
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: full
+    use_cross_attention_bridge: true
+    share_stage1_weights: true
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5

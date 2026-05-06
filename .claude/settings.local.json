@@ -13,7 +13,15 @@
       "Bash(xargs ls *)",
       "Bash(python -c ' *)",
       "Bash(python run.py --cfg job)",
-      "Bash(python run.py experiment.trainer.max_epochs=1 experiment.data.batch_size=8 experiment.data.num_workers=0 experiment.data.eager_load=false)"
+      "Bash(python run.py experiment.trainer.max_epochs=1 experiment.data.batch_size=8 experiment.data.num_workers=0 experiment.data.eager_load=false)",
+      "Bash(python3 -c \"import sys; sys.path.insert\\(0, '/Users/huseyinkaraca/Desktop/s2t-tr-dev'\\); from src.experiments import run; print\\(run.__file__\\)\")",
+      "Bash(python -c \"import hydra; print\\(hydra.__version__\\); print\\(hydra.__file__\\)\")",
+      "Bash(rm -rf /tmp/smoke_mlruns)",
+      "Bash(MLFLOW_TRACKING_URI=file:///tmp/smoke_mlruns make run CONFIG=smoke)",
+      "Read(//private/tmp/smoke_mlruns/**)",
+      "Bash(rm -rf /tmp/smoke_mlruns /Users/huseyinkaraca/Desktop/s2t-tr-dev/data/processed/synthetic_regime_switch /Users/huseyinkaraca/Desktop/s2t-tr-dev/.parquet_cache)",
+      "Bash(git -C /Users/huseyinkaraca/Desktop/s2t-tr-dev status --short)",
+      "Bash(git rm *)"
     ]
   }
 }

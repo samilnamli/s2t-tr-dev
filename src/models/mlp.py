@@ -2,45 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.models.base import TrainableLightningSelector
 from src.data.dataset import MODEL_NAMES
+from src.models.base import TrainableLightningSelector
 
-
-# ---------------------------------------------------------------------------
-# Hydra structured config
-# ---------------------------------------------------------------------------
-
-@dataclass
-class MLPPoolSelectorConfig:
-    _target_: str = "src.models.mlp.MLPPoolSelectorLightning"
-    name: str = "mlp_pool"
-    model_names: list[str] = field(default_factory=lambda: list(MODEL_NAMES))
-    # Architecture
-    d_hidden: int = 1024
-    n_layers: int = 2
-    dropout: float = 0.1
-    # Loss
-    primary_weight: float = 0.0
-    aux_ce_weight: float = 1.0
-    soft_ce_weight: float = 0.0
-    soft_ce_temperature: float = 1.5
-    label_smoothing: float = 0.1
-    class_balanced_loss: bool = True
-    # Optimizer
-    learning_rate: float = 1e-4
-    weight_decay: float = 1e-2
-    warmup_steps: int = 200
-
-
-# ---------------------------------------------------------------------------
-# nn.Module
-# ---------------------------------------------------------------------------
 
 class MLPPoolSelector(nn.Module):
     """Mean-pool each expert's frames then classify."""
@@ -83,16 +51,12 @@ class MLPPoolSelector(nn.Module):
         return F.softmax(logits, dim=-1)
 
 
-# ---------------------------------------------------------------------------
-# Lightning wrapper
-# ---------------------------------------------------------------------------
-
 class MLPPoolSelectorLightning(TrainableLightningSelector):
     """Lightning wrapper for MLPPoolSelector."""
 
     def __init__(
         self,
-        model_names: list[str] = MODEL_NAMES,
+        model_names: list[str] | None = None,
         d_hidden: int = 1024,
         n_layers: int = 2,
         dropout: float = 0.1,
@@ -105,7 +69,6 @@ class MLPPoolSelectorLightning(TrainableLightningSelector):
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-2,
         warmup_steps: int = 200,
-        # model_dims provided at fit() time via _set_dims()
         model_dims: dict[str, int] | None = None,
         **kwargs,
     ):
@@ -121,12 +84,11 @@ class MLPPoolSelectorLightning(TrainableLightningSelector):
             warmup_steps=warmup_steps,
         )
         self.save_hyperparameters()
-        self.model_names = list(model_names)
+        self.model_names = list(model_names) if model_names is not None else list(MODEL_NAMES)
         self._d_hidden = d_hidden
         self._n_layers = n_layers
         self._dropout = dropout
         self._model_dims = model_dims
-        # Build model now only if dims are known
         if model_dims is not None:
             self._build(model_dims)
 

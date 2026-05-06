@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 _NULL = ""
 
 
@@ -24,10 +23,7 @@ def rover_combine(
         weights: ``(K,)`` per-system weights summing to 1.
     """
     N = len(transcriptions[model_names[0]])
-    return [
-        _rover_one([transcriptions[n][i] for n in model_names], weights)
-        for i in range(N)
-    ]
+    return [_rover_one([transcriptions[n][i] for n in model_names], weights) for i in range(N)]
 
 
 def _rover_one(hypotheses: list[str], weights: np.ndarray) -> str:

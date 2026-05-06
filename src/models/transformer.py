@@ -3,51 +3,14 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.models.base import TrainableLightningSelector
 from src.data.dataset import MODEL_NAMES
+from src.models.base import TrainableLightningSelector
 
-
-# ---------------------------------------------------------------------------
-# Hydra structured config
-# ---------------------------------------------------------------------------
-
-@dataclass
-class HierarchicalTransformerConfig:
-    _target_: str = "src.models.transformer.ASRModelSelectorLightning"
-    name: str = "hierarchical_transformer"
-    model_names: list[str] = field(default_factory=lambda: list(MODEL_NAMES))
-    # Architecture
-    d_model: int = 256
-    n_heads: int = 4
-    stage1_layers: int = 2
-    stage2_layers: int = 1
-    ffn_dim: int = 512
-    dropout: float = 0.1
-    use_cross_attention_bridge: bool = True
-    share_stage1_weights: bool = True
-    max_seq_len: int = 2500
-    # Loss (proposed recipe)
-    primary_weight: float = 1.0
-    aux_ce_weight: float = 0.3
-    soft_ce_weight: float = 0.5
-    soft_ce_temperature: float = 1.5
-    label_smoothing: float = 0.1
-    class_balanced_loss: bool = True
-    # Optimizer
-    learning_rate: float = 1e-4
-    weight_decay: float = 1e-2
-    warmup_steps: int = 200
-
-
-# ---------------------------------------------------------------------------
-# nn.Module components
-# ---------------------------------------------------------------------------
 
 class SinusoidalPositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_len: int = 4000, dropout: float = 0.1):
@@ -55,9 +18,7 @@ class SinusoidalPositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         self.register_buffer("pe", pe.unsqueeze(0))
@@ -132,16 +93,24 @@ class ASRModelSelector(nn.Module):
 
         if share_stage1_weights:
             enc_layer = nn.TransformerEncoderLayer(
-                d_model=d_model, nhead=n_heads, dim_feedforward=ffn_dim,
-                dropout=dropout, batch_first=True, activation="gelu",
+                d_model=d_model,
+                nhead=n_heads,
+                dim_feedforward=ffn_dim,
+                dropout=dropout,
+                batch_first=True,
+                activation="gelu",
             )
             self.stage1_encoder = nn.TransformerEncoder(enc_layer, num_layers=stage1_layers)
         else:
             self.stage1_encoders = nn.ModuleDict()
             for name in model_names:
                 enc_layer = nn.TransformerEncoderLayer(
-                    d_model=d_model, nhead=n_heads, dim_feedforward=ffn_dim,
-                    dropout=dropout, batch_first=True, activation="gelu",
+                    d_model=d_model,
+                    nhead=n_heads,
+                    dim_feedforward=ffn_dim,
+                    dropout=dropout,
+                    batch_first=True,
+                    activation="gelu",
                 )
                 self.stage1_encoders[name] = nn.TransformerEncoder(
                     enc_layer, num_layers=stage1_layers
@@ -153,8 +122,12 @@ class ASRModelSelector(nn.Module):
             )
 
         fusion_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=n_heads, dim_feedforward=ffn_dim,
-            dropout=dropout, batch_first=True, activation="gelu",
+            d_model=d_model,
+            nhead=n_heads,
+            dim_feedforward=ffn_dim,
+            dropout=dropout,
+            batch_first=True,
+            activation="gelu",
         )
         self.stage2_encoder = nn.TransformerEncoder(fusion_layer, num_layers=stage2_layers)
 
@@ -184,9 +157,7 @@ class ASRModelSelector(nn.Module):
         B = hidden_states.size(0)
         x = self.projection(model_name, hidden_states)
         x = self.pos_encoder(x)
-        model_emb = self.model_embeddings(
-            torch.tensor(model_idx, device=x.device)
-        )
+        model_emb = self.model_embeddings(torch.tensor(model_idx, device=x.device))
         x = x + model_emb.unsqueeze(0).unsqueeze(0)
 
         cls = self.cls_tokens[model_idx].unsqueeze(0).expand(B, -1, -1)
@@ -225,12 +196,8 @@ class ASRModelSelector(nn.Module):
             updated_cls: dict[str, torch.Tensor] = {}
             for name in self.model_names:
                 others = [n for n in self.model_names if n != name]
-                other_seqs = torch.cat(
-                    [full_sequences[n][:, 1:, :] for n in others], dim=1
-                )
-                other_masks = torch.cat(
-                    [full_padding_masks[n][:, 1:] for n in others], dim=1
-                )
+                other_seqs = torch.cat([full_sequences[n][:, 1:, :] for n in others], dim=1)
+                other_masks = torch.cat([full_padding_masks[n][:, 1:] for n in others], dim=1)
                 updated_cls[name] = self.cross_attention_bridges[name](
                     cls_token=cls_outputs[name],
                     other_sequences=other_seqs,
@@ -239,9 +206,7 @@ class ASRModelSelector(nn.Module):
             cls_outputs = updated_cls
 
         global_cls = self.global_cls.expand(B, -1, -1)
-        model_summaries = torch.cat(
-            [cls_outputs[name] for name in self.model_names], dim=1
-        )
+        model_summaries = torch.cat([cls_outputs[name] for name in self.model_names], dim=1)
         fusion_input = torch.cat([global_cls, model_summaries], dim=1)
         fusion_output = self.stage2_encoder(fusion_input)
 
@@ -253,12 +218,13 @@ class ASRModelSelector(nn.Module):
 # Lightning wrapper
 # ---------------------------------------------------------------------------
 
+
 class ASRModelSelectorLightning(TrainableLightningSelector):
     """Lightning wrapper for the hierarchical transformer architecture."""
 
     def __init__(
         self,
-        model_names: list[str] = MODEL_NAMES,
+        model_names: list[str] | None = None,
         d_model: int = 256,
         n_heads: int = 4,
         stage1_layers: int = 2,
@@ -292,12 +258,17 @@ class ASRModelSelectorLightning(TrainableLightningSelector):
             warmup_steps=warmup_steps,
         )
         self.save_hyperparameters()
-        self.model_names = list(model_names)
+        self.model_names = list(model_names) if model_names is not None else list(MODEL_NAMES)
         self._arch_kwargs = dict(
-            d_model=d_model, n_heads=n_heads, stage1_layers=stage1_layers,
-            stage2_layers=stage2_layers, ffn_dim=ffn_dim, dropout=dropout,
+            d_model=d_model,
+            n_heads=n_heads,
+            stage1_layers=stage1_layers,
+            stage2_layers=stage2_layers,
+            ffn_dim=ffn_dim,
+            dropout=dropout,
             use_cross_attention_bridge=use_cross_attention_bridge,
-            share_stage1_weights=share_stage1_weights, max_seq_len=max_seq_len,
+            share_stage1_weights=share_stage1_weights,
+            max_seq_len=max_seq_len,
         )
         self._model_dims = model_dims
         if model_dims is not None:
