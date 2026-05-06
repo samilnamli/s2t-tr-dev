@@ -243,7 +243,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         with tempfile.TemporaryDirectory() as tmp_dir:
             import os
             checkpoint_cb = pl.callbacks.ModelCheckpoint(
-                monitor="val/total_loss",
+                monitor="val/selected_wer",
                 mode="min",
                 save_top_k=1,
                 dirpath=os.path.join(tmp_dir, "checkpoints"),
@@ -252,7 +252,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
             callbacks = [checkpoint_cb]
             if self.early_stopping_patience is not None:
                 early_stop_cb = pl.callbacks.EarlyStopping(
-                    monitor="val/total_loss",
+                    monitor="val/selected_wer",
                     patience=self.early_stopping_patience,
                     mode="min",
                 )

@@ -21,7 +21,7 @@ fixed_data_split: false
 float32_matmul_precision: "medium"
 
 trainer:
-  max_epochs: 2
+  max_epochs: 10
   accelerator: auto
   devices: 1
   precision: "32" # Use 32 for CPU/MPS compatibility
