@@ -162,7 +162,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
         bs = batch["wer_matrix"].size(0)
-        prog = {"total_loss"}
+        prog = set()
         for k, v in metrics.items():
             self.log(
                 f"train/{k}",
@@ -178,7 +178,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
         bs = batch["wer_matrix"].size(0)
-        prog = {"total_loss", "selected_wer", "selection_accuracy"}
+        prog = set()
         for k, v in metrics.items():
             self.log(f"val/{k}", v, on_epoch=True, prog_bar=(k in prog), batch_size=bs)
         return loss
