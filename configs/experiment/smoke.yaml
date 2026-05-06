@@ -10,6 +10,7 @@ defaults:
 _target_: src.experiments.base.BaseExperiment
 parent_run_name: smoke_v1
 seed: 0
+seeds: [0, 1]   # exercise multi-seed aggregation in the smoke run
 
 trainer:
   max_epochs: 1

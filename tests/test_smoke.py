@@ -43,7 +43,7 @@ def mlflow_backend(tmp_path, monkeypatch):
     yield uri
 
 
-def test_smoke_synthetic_full_pipeline(tmp_path, mlflow_backend, monkeypatch):
+def test_smoke_synthetic_full_pipeline(tmp_path, mlflow_backend, monkeypatch):  # noqa: ARG001
     monkeypatch.setenv("HYDRA_FULL_ERROR", "1")
     parquet = tmp_path / "synth.parquet"
 
@@ -59,31 +59,86 @@ def test_smoke_synthetic_full_pipeline(tmp_path, mlflow_backend, monkeypatch):
     experiment = instantiate(cfg.experiment, _recursive_=False)
     results = experiment.run(cfg.experiment)
 
-    assert {"oracle", "random", "mlp_pool"} <= set(results.keys())
+    n_seeds = len(experiment.seeds)
+    assert n_seeds >= 2, "smoke config must exercise multi-seed (seeds=[0, 1])"
+
+    method_names = {"oracle", "random", "mlp_pool"}
+    assert method_names <= set(results.keys())
     for name, m in results.items():
         assert "error" not in m, f"{name} failed: {m.get('error')}"
+        assert m["n_seeds"] == n_seeds
+        # Across-seed SEM is reported under wer_sem in multi-seed mode.
+        assert "wer_sem" in m
+        # Cross-seed SEM sidecar exists for the headline metric.
+        assert "wer_mean__seed_sem" in m
+
+    # Deterministic methods (Oracle) must produce zero across-seed variance.
+    assert results["oracle"]["wer_mean__seed_sem"] == pytest.approx(0.0, abs=1e-12)
 
     client = mlflow.tracking.MlflowClient()
     exp = client.get_experiment_by_name("smoke")
     assert exp is not None
     runs = client.search_runs([exp.experiment_id])
+
     parents = [r for r in runs if r.data.tags.get("mlflow.parentRunId") is None]
-    children = [r for r in runs if r.data.tags.get("mlflow.parentRunId") is not None]
-    assert len(parents) >= 1, "expected at least one parent run"
     parent = next(p for p in parents if p.info.run_id == experiment.parent_run_id)
-    children_of_this_parent = [
-        c for c in children if c.data.tags["mlflow.parentRunId"] == parent.info.run_id
+
+    method_runs = [
+        r for r in runs if r.data.tags.get("mlflow.parentRunId") == parent.info.run_id
     ]
-    assert len(children_of_this_parent) == len(results)
+    assert len(method_runs) == len(results), "one method run per result expected"
+
+    method_run_ids = {r.info.run_id for r in method_runs}
+    seed_runs = [
+        r for r in runs if r.data.tags.get("mlflow.parentRunId") in method_run_ids
+    ]
+    assert len(seed_runs) == len(method_runs) * n_seeds, (
+        f"expected {len(method_runs)} × {n_seeds} grand-children, got {len(seed_runs)}"
+    )
+
+    for mr in method_runs:
+        assert mr.data.params["n_seeds"] == str(n_seeds)
+        assert "final/wer_mean" in mr.data.metrics
+
+    for sr in seed_runs:
+        assert "seed" in sr.data.params
+        assert sr.data.params["seed"] in {"0", "1"}
 
     assert "git_commit" in parent.data.params
-
     artifacts = {a.path for a in client.list_artifacts(parent.info.run_id, "repro")}
     assert "repro/git_state.json" in artifacts
     assert "repro/resolved_config.yaml" in artifacts
 
     results_artifacts = {a.path for a in client.list_artifacts(parent.info.run_id, "results")}
     assert "results/test_wer_comparison.json" in results_artifacts
+
+
+def test_single_seed_mode_is_backward_compatible(tmp_path, mlflow_backend, monkeypatch):  # noqa: ARG001
+    """Without ``seeds``, behaviour is identical to a single-seed run:
+    the aggregate run wraps a single grand-child, no across-seed SEM is
+    written, and ``wer_sem`` retains its within-seed sampling value."""
+    monkeypatch.setenv("HYDRA_FULL_ERROR", "1")
+    parquet = tmp_path / "synth_single.parquet"
+
+    with initialize_config_dir(version_base="1.3", config_dir=str(REPO_ROOT / "configs")):
+        cfg = compose(
+            config_name="config",
+            overrides=[
+                "experiment=smoke",
+                f"experiment.data.parquet_path={parquet}",
+                "~experiment.seeds",  # remove the seeds list
+            ],
+        )
+
+    experiment = instantiate(cfg.experiment, _recursive_=False)
+    results = experiment.run(cfg.experiment)
+
+    assert experiment.seeds == [experiment.seed]
+    for m in results.values():
+        assert m["n_seeds"] == 1
+        assert "wer_mean__seed_sem" not in m, (
+            "single-seed mode must not synthesise an across-seed SEM"
+        )
 
 
 def test_synthetic_parquet_is_cached(tmp_path):

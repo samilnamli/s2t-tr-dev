@@ -14,7 +14,8 @@ defaults:
 
 _target_: src.experiments.base.BaseExperiment
 parent_run_name: v1
-seed: 42
+seed: 42 # data split seed
+seeds: [42, 0, 1, 2] # model training seeds
 
 trainer:
   max_epochs: 50
