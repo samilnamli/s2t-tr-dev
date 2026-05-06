@@ -69,6 +69,7 @@ class MLPPoolSelectorLightning(TrainableLightningSelector):
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-2,
         warmup_steps: int = 200,
+        early_stopping_patience: int | None = None,
         model_dims: dict[str, int] | None = None,
         **kwargs,
     ):
@@ -82,6 +83,7 @@ class MLPPoolSelectorLightning(TrainableLightningSelector):
             learning_rate=learning_rate,
             weight_decay=weight_decay,
             warmup_steps=warmup_steps,
+            early_stopping_patience=early_stopping_patience,
         )
         self.save_hyperparameters()
         self.model_names = list(model_names) if model_names is not None else list(MODEL_NAMES)
