@@ -1,8 +1,0 @@
-artifact_location: /Users/huseyinkaraca/Desktop/s2t-tr-dev/mlruns/909944021444022486
-creation_time: 1778021692058
-experiment_id: '909944021444022486'
-last_update_time: 1778021692058
-lifecycle_stage: active
-name: ASR_Model_Selector
-trace_location: null
-workspace: default
