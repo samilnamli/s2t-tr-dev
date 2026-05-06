@@ -84,6 +84,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         learning_rate: float = 1e-4,
         weight_decay: float = 1e-2,
         warmup_steps: int = 200,
+        early_stopping_patience: Optional[int] = None,
         *args: Any,
         **kwargs: Any,
     ):
@@ -97,6 +98,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.warmup_steps = warmup_steps
+        self.early_stopping_patience = early_stopping_patience
         self.register_buffer("class_weights", None)
 
     def _init_class_weights(self, class_priors: list[float]) -> None:
@@ -226,13 +228,22 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
             save_top_k=1,
         )
 
+        callbacks = [checkpoint_cb]
+        if self.early_stopping_patience is not None:
+            early_stop_cb = pl.callbacks.EarlyStopping(
+                monitor="val/total_loss",
+                patience=self.early_stopping_patience,
+                mode="min",
+            )
+            callbacks.append(early_stop_cb)
+
         with tempfile.TemporaryDirectory() as tmp_dir:
             if trainer_cfg is not None:
                 trainer: pl.Trainer = hydra.utils.instantiate(
                     trainer_cfg,
                     default_root_dir=tmp_dir,
                     logger=logger,
-                    callbacks=[checkpoint_cb],
+                    callbacks=callbacks,
                 )
             else:
                 trainer = pl.Trainer(
@@ -240,7 +251,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
                     accelerator="auto",
                     default_root_dir=tmp_dir,
                     logger=logger,
-                    callbacks=[checkpoint_cb],
+                    callbacks=callbacks,
                 )
             trainer.fit(self, datamodule=datamodule)
             test_results = trainer.test(self, datamodule=datamodule, ckpt_path="best")

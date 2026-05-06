@@ -24,7 +24,7 @@ trainer:
 data:
   batch_size: 128
   max_seq_len: 2000
-  eager_load: false
+  eager_load: true
 
 child_runs:
   - _target_: src.models.baselines.SingleModelBaseline
@@ -52,6 +52,7 @@ child_runs:
     aux_ce_weight: 1.0
     soft_ce_weight: 0.0
     class_balanced_loss: true
+    early_stopping_patience: 5
   - _target_: src.models.transformer.ASRModelSelectorLightning
     name: hierarchical_transformer
     primary_weight: 1.0
@@ -59,3 +60,4 @@ child_runs:
     soft_ce_weight: 0.5
     soft_ce_temperature: 1.5
     class_balanced_loss: true
+    early_stopping_patience: 5
