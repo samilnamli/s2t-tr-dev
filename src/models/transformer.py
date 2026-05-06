@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import math
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+# Fix for PyTorch TransformerEncoder masking bug on Apple Silicon (MPS)
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 from src.data.dataset import MODEL_NAMES
 from src.models.base import TrainableLightningSelector
@@ -91,6 +95,11 @@ class ASRModelSelector(nn.Module):
         self.model_embeddings = nn.Embedding(self.n_models, d_model)
         self.cls_tokens = nn.Parameter(torch.randn(self.n_models, 1, d_model) * 0.02)
 
+        # PyTorch NestedTensor optimization is broken on Apple Silicon (MPS).
+        # We disable it locally to avoid crashes, but keep it enabled on CUDA servers
+        # for maximum performance.
+        enable_nested_tensor = not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+
         if share_stage1_weights:
             enc_layer = nn.TransformerEncoderLayer(
                 d_model=d_model,
@@ -100,7 +109,9 @@ class ASRModelSelector(nn.Module):
                 batch_first=True,
                 activation="gelu",
             )
-            self.stage1_encoder = nn.TransformerEncoder(enc_layer, num_layers=stage1_layers)
+            self.stage1_encoder = nn.TransformerEncoder(
+                enc_layer, num_layers=stage1_layers, enable_nested_tensor=enable_nested_tensor
+            )
         else:
             self.stage1_encoders = nn.ModuleDict()
             for name in model_names:
@@ -113,7 +124,7 @@ class ASRModelSelector(nn.Module):
                     activation="gelu",
                 )
                 self.stage1_encoders[name] = nn.TransformerEncoder(
-                    enc_layer, num_layers=stage1_layers
+                    enc_layer, num_layers=stage1_layers, enable_nested_tensor=enable_nested_tensor
                 )
 
         if use_cross_attention_bridge:
@@ -129,7 +140,9 @@ class ASRModelSelector(nn.Module):
             batch_first=True,
             activation="gelu",
         )
-        self.stage2_encoder = nn.TransformerEncoder(fusion_layer, num_layers=stage2_layers)
+        self.stage2_encoder = nn.TransformerEncoder(
+            fusion_layer, num_layers=stage2_layers, enable_nested_tensor=enable_nested_tensor
+        )
 
         self.global_cls = nn.Parameter(torch.randn(1, 1, d_model) * 0.02)
         self.classifier = nn.Sequential(

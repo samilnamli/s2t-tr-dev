@@ -240,25 +240,44 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
                 log_model=True,
             )
 
-        checkpoint_cb = pl.callbacks.ModelCheckpoint(
-            monitor="val/total_loss",
-            mode="min",
-            save_top_k=1,
-        )
-
-        callbacks = [checkpoint_cb]
-        if self.early_stopping_patience is not None:
-            early_stop_cb = pl.callbacks.EarlyStopping(
-                monitor="val/total_loss",
-                patience=self.early_stopping_patience,
-                mode="min",
-            )
-            callbacks.append(early_stop_cb)
-
         with tempfile.TemporaryDirectory() as tmp_dir:
+            import os
+            checkpoint_cb = pl.callbacks.ModelCheckpoint(
+                monitor="val/total_loss",
+                mode="min",
+                save_top_k=1,
+                dirpath=os.path.join(tmp_dir, "checkpoints"),
+            )
+
+            callbacks = [checkpoint_cb]
+            if self.early_stopping_patience is not None:
+                early_stop_cb = pl.callbacks.EarlyStopping(
+                    monitor="val/total_loss",
+                    patience=self.early_stopping_patience,
+                    mode="min",
+                )
+                callbacks.append(early_stop_cb)
+
             if trainer_cfg is not None:
+                import copy
+                from omegaconf import open_dict
+                cfg_copy = copy.deepcopy(trainer_cfg)
+                
+                cfg_callbacks = cfg_copy.get("callbacks", [])
+                if cfg_callbacks:
+                    instantiated_cfg_callbacks = hydra.utils.instantiate(cfg_callbacks)
+                    from omegaconf import ListConfig
+                    if isinstance(instantiated_cfg_callbacks, (list, tuple, ListConfig)):
+                        callbacks.extend(instantiated_cfg_callbacks)
+                    else:
+                        callbacks.append(instantiated_cfg_callbacks)
+                
+                with open_dict(cfg_copy):
+                    if "callbacks" in cfg_copy:
+                        del cfg_copy["callbacks"]
+                
                 trainer: pl.Trainer = hydra.utils.instantiate(
-                    trainer_cfg,
+                    cfg_copy,
                     default_root_dir=tmp_dir,
                     logger=logger,
                     callbacks=callbacks,
@@ -272,7 +291,7 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
                     callbacks=callbacks,
                 )
             trainer.fit(self, datamodule=datamodule)
-            test_results = trainer.test(self, datamodule=datamodule, ckpt_path="best")
+            test_results = trainer.test(self, datamodule=datamodule, ckpt_path="best", verbose=False)
 
         self._last_test_results = test_results[0] if test_results else {}
 

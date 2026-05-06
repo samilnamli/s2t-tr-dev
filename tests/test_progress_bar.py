@@ -28,7 +28,8 @@ def test_robust_progress_bar():
         limit_val_batches=10, 
         callbacks=[bar], 
         enable_model_summary=False, 
-        logger=False
+        logger=False,
+        enable_checkpointing=False
     )
     trainer.fit(model)
 

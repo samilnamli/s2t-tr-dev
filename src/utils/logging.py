@@ -114,6 +114,20 @@ def _tqdm_aware_stderr_sink(message: str) -> None:
     tqdm.write(message, end="", file=sys.stderr)
 
 
+class StreamToLoguru:
+    """Redirects stdout string buffer lines directly to loguru."""
+    def __init__(self, level: str = "INFO"):
+        self._level = level
+
+    def write(self, buffer: str) -> None:
+        for line in buffer.splitlines():
+            line = line.strip()
+            if line:
+                logger.opt(depth=1).log(self._level, line)
+
+    def flush(self) -> None:
+        pass
+
 def setup_unified_logging(
     level: str = "INFO",
     log_file: Optional[Union[str, Path]] = None,
@@ -156,6 +170,9 @@ def setup_unified_logging(
 
     logging.root.handlers = [InterceptHandler()]
     logging.root.setLevel(level)
+    
+    # Intercept raw print() calls from Dagshub/MLFlow
+    sys.stdout = StreamToLoguru(level)
 
     noisy_prefixes = (*_NOISY_LOGGER_PREFIXES, *tuple(extra_silenced))
 

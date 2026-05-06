@@ -33,7 +33,7 @@ from hydra.utils import instantiate
 from loguru import logger
 import mlflow
 import numpy as np
-from omegaconf import DictConfig, OmegaConf, open_dict
+from omegaconf import DictConfig, ListConfig, OmegaConf, open_dict
 import pandas as pd
 import pytorch_lightning as pl
 import yaml
@@ -371,11 +371,13 @@ class BaseExperiment:
         tests = OmegaConf.select(cfg, "tests", default=None) if isinstance(cfg, DictConfig) else cfg.get("tests")
         if tests is None:
             return list(DEFAULT_STATS_TESTS)
-        if isinstance(tests, DictConfig) or isinstance(tests, list):
+        if isinstance(tests, (list, ListConfig)):
             return [
                 OmegaConf.to_container(t, resolve=True) if isinstance(t, DictConfig) else dict(t)
                 for t in tests
             ]
+        if isinstance(tests, DictConfig):
+            return [OmegaConf.to_container(tests, resolve=True)]
         raise TypeError(f"Unexpected stats.tests type: {type(tests)!r}")
 
     def _run_pairwise_stats(self, datamodule: pl.LightningDataModule) -> None:

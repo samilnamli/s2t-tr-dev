@@ -45,45 +45,44 @@ class RobustProgressBar(pl.callbacks.ProgressBar):
                 pass
         return str(v)
 
-    def on_train_batch_end(
-        self, trainer: "pl.Trainer", pl_module: "pl.LightningModule", outputs: Any, batch: Any, batch_idx: int
-    ) -> None:
-        super().on_train_batch_end(trainer, pl_module, outputs, batch, batch_idx)
-        if self.is_disabled or self.refresh_rate <= 0:
+    def on_train_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        super().on_train_epoch_end(trainer, pl_module)
+        # Wait for validation to print train and val metrics together
+        if trainer.enable_validation and trainer.val_dataloaders is not None:
             return
-
-        total_steps = trainer.estimated_stepping_batches
-        if total_steps == float('inf'):
-            total_steps = trainer.num_training_batches
-
-        if (batch_idx + 1) % self.refresh_rate == 0 or (batch_idx + 1) == total_steps:
-            metrics = self.get_metrics(trainer, pl_module)
-            metrics.pop("v_num", None)
             
-            metrics_str = " | ".join(f"{k}: {self._format_value(v)}" for k, v in metrics.items())
-            logger.info(f"Epoch {trainer.current_epoch} | Step {batch_idx + 1}/{total_steps} | {metrics_str}")
+        if self.is_disabled or trainer.sanity_checking:
+            return
+            
+        metrics = {k: v.item() if hasattr(v, "item") else v for k, v in trainer.callback_metrics.items()}
+        metrics.pop("v_num", None)
+        metrics_str = " | ".join(f"{k}: {self._format_value(v)}" for k, v in metrics.items())
+        if metrics_str:
+            logger.info(f"Epoch {trainer.current_epoch} | {metrics_str}")
 
     def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         super().on_validation_epoch_end(trainer, pl_module)
-        if self.is_disabled:
+        if self.is_disabled or trainer.sanity_checking:
             return
             
-        metrics = self.get_metrics(trainer, pl_module)
+        metrics = {k: v.item() if hasattr(v, "item") else v for k, v in trainer.callback_metrics.items()}
         metrics.pop("v_num", None)
         
         metrics_str = " | ".join(f"{k}: {self._format_value(v)}" for k, v in metrics.items())
-        logger.info(f"Epoch {trainer.current_epoch} Validation | {metrics_str}")
+        if metrics_str:
+            logger.info(f"Epoch {trainer.current_epoch} | {metrics_str}")
 
     def on_test_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
         super().on_test_epoch_end(trainer, pl_module)
         if self.is_disabled:
             return
             
-        metrics = self.get_metrics(trainer, pl_module)
+        metrics = {k: v.item() if hasattr(v, "item") else v for k, v in trainer.callback_metrics.items()}
         metrics.pop("v_num", None)
         
         metrics_str = " | ".join(f"{k}: {self._format_value(v)}" for k, v in metrics.items())
-        logger.info(f"Test | {metrics_str}")
+        if metrics_str:
+            logger.info(f"Test | {metrics_str}")
 
 
 def make_progress_bar(refresh_rate: int = 50) -> pl.callbacks.Callback:

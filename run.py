@@ -27,7 +27,10 @@ from src.utils.mlflow_setup import setup_mlflow
 
 @hydra.main(version_base="1.3", config_path="configs", config_name="config")
 def main(cfg: DictConfig) -> None:
-    setup_unified_logging(level=cfg.logging.level)
+    logging_kwargs = {"level": cfg.logging.level}
+    if "fmt" in cfg.logging:
+        logging_kwargs["fmt"] = cfg.logging.fmt
+    setup_unified_logging(**logging_kwargs)
 
     mlflow_cfg = OmegaConf.to_container(cfg.mlflow, resolve=True)
     if not mlflow_cfg.get("experiment_name"):
