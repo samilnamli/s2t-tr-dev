@@ -8,7 +8,7 @@ enable_model_summary: false
 num_sanity_val_steps: 0
 precision: bf16-mixed
 callbacks:
-  - _target_: pytorch_lightning.callbacks.TQDMProgressBar
+  - _target_: src.utils.progress.make_progress_bar
     refresh_rate: 50
   - _target_: pytorch_lightning.callbacks.LearningRateMonitor
     logging_interval: epoch

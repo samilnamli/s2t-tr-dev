@@ -10,6 +10,8 @@ defaults:
 _target_: src.experiments.base.BaseExperiment
 parent_run_name: synt_v1
 seed: 42
+seeds: [42, 0, 1, 2]
+fixed_data_split: false
 
 trainer:
   max_epochs: 30
@@ -19,7 +21,13 @@ data:
   num_samples: 10000
   num_regimes: 4
   frame_length: 128
-  batch_size: 128
+  batch_size: 256
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
 
 child_runs:
   - _target_: src.models.baselines.SingleModelBaseline
@@ -43,6 +51,7 @@ child_runs:
     aux_ce_weight: 1.0
     soft_ce_weight: 0.0
     class_balanced_loss: true
+    early_stopping_patience: 5
   - _target_: src.models.transformer.ASRModelSelectorLightning
     name: hierarchical_transformer
     primary_weight: 1.0
@@ -50,3 +59,4 @@ child_runs:
     soft_ce_weight: 0.5
     soft_ce_temperature: 1.5
     class_balanced_loss: true
+    early_stopping_patience: 5

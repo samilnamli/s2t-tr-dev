@@ -20,6 +20,7 @@ To re-run a logged experiment exactly as it was, use
 from __future__ import annotations
 
 import copy
+import itertools
 import math
 import os
 from pathlib import Path
@@ -31,6 +32,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from hydra.utils import instantiate
 from loguru import logger
 import mlflow
+import numpy as np
 from omegaconf import DictConfig, OmegaConf, open_dict
 import pandas as pd
 import pytorch_lightning as pl
@@ -40,6 +42,13 @@ from src.utils.git import git_diff_patch, git_state, working_tree_clean
 
 # Across-seed SEM is exposed under this suffix in the aggregated metrics dict.
 SEED_SEM_SUFFIX = "__seed_sem"
+
+DEFAULT_STATS_TESTS: List[Dict[str, Any]] = [
+    {
+        "_target_": "src.stats.paired_t.NadeauBengioCorrectedTTest",
+        "alpha": 0.05,
+    }
+]
 
 
 class BaseExperiment:
@@ -56,14 +65,27 @@ class BaseExperiment:
         parent_run_name: str = "v1",
         seed: int = 42,
         seeds: Optional[Iterable[int]] = None,
+        fixed_data_split: bool = False,
+        stats: Optional[Any] = None,
         **_kwargs,
     ):
         self.parent_run_name = parent_run_name
-        self.seed = seed  # data-split seed; constant across method runs
+        # ``self.seed`` is the data-split anchor used when
+        # ``fixed_data_split=True`` (i.e. when the split must NOT vary
+        # with the per-seed model init). When the (default) statistically
+        # valid mode is on, every seed in ``self.seeds`` re-derives both
+        # the split and the model init from the same integer.
+        self.seed = seed
         self.seeds: List[int] = [int(s) for s in seeds] if seeds is not None else [int(seed)]
+        self.fixed_data_split = bool(fixed_data_split)
+        self.stats_cfg = stats
         self.results: Dict[str, Dict[str, Any]] = {}
+        self._per_seed_results: Dict[str, List[Dict[str, Any]]] = {}
         self.parent_run_id: Optional[str] = None
         pl.seed_everything(seed, workers=True)
+
+    def _split_seed_for(self, model_seed: int) -> int:
+        return self.seed if self.fixed_data_split else int(model_seed)
 
     def run(self, cfg: DictConfig) -> Dict[str, Dict[str, Any]]:
         with mlflow.start_run(run_name=self.parent_run_name) as parent_run:
@@ -78,13 +100,25 @@ class BaseExperiment:
                     "seeds": str(self.seeds),
                     "n_seeds": len(self.seeds),
                     "n_children": len(child_runs),
+                    "fixed_data_split": self.fixed_data_split,
                 }
             )
+
+            if self.fixed_data_split and len(self.seeds) > 1:
+                msg = (
+                    "fixed_data_split=True with n_seeds>1: the train/test "
+                    "resampling assumption of the Nadeau-Bengio corrected "
+                    "paired t-test is violated. p-values are still computed "
+                    "but should be treated as informative-only."
+                )
+                logger.warning(msg)
+                mlflow.set_tag("warning.statistical_test_assumptions", msg)
 
             for child_cfg in child_runs:
                 self._run_method(child_cfg, datamodule, cfg.trainer)
 
             self._log_comparison_table()
+            self._run_pairwise_stats(datamodule)
 
         return self.results
 
@@ -141,6 +175,7 @@ class BaseExperiment:
                     "method_name": method_name,
                     "seeds": str(self.seeds),
                     "n_seeds": len(self.seeds),
+                    "fixed_data_split": self.fixed_data_split,
                 }
             )
             per_seed: List[Dict[str, Any]] = []
@@ -154,6 +189,7 @@ class BaseExperiment:
                         method_run_name=method_run_name,
                     )
                 )
+            self._per_seed_results[method_name] = per_seed
 
             succeeded = [m for m in per_seed if "error" not in m]
             if not succeeded:
@@ -182,13 +218,26 @@ class BaseExperiment:
     ) -> Dict[str, Any]:
         """Fit + evaluate one (method, seed) pair inside its own MLflow run."""
         run_name = f"{method_run_name}__seed{seed}"
+        split_seed = self._split_seed_for(seed)
         with mlflow.start_run(run_name=run_name, nested=True) as seed_run:
             try:
+                # Re-permute the train/val/test indices for this seed before
+                # any model is touched. With ``fixed_data_split=False`` (the
+                # default) this means each seed sees an independent test set
+                # — the precondition for the Nadeau-Bengio test.
+                if hasattr(datamodule, "reseed_split"):
+                    datamodule.reseed_split(split_seed)
                 pl.seed_everything(seed, workers=True)
                 seed_cfg = copy.deepcopy(child_cfg)
                 with open_dict(seed_cfg):
                     seed_cfg.seed = seed
-                mlflow.log_param("seed", seed)
+                mlflow.log_params(
+                    {
+                        "seed": seed,
+                        "split_seed": split_seed,
+                        "fixed_data_split": self.fixed_data_split,
+                    }
+                )
                 selector = instantiate(seed_cfg)
                 selector.fit(
                     datamodule,
@@ -272,6 +321,137 @@ class BaseExperiment:
         df = pd.DataFrame(rows).sort_values("wer_mean")
         mlflow.log_table(data=df, artifact_file="results/test_wer_comparison.json")
         logger.info("Test WER comparison:\n{}", df.to_string(index=False))
+
+    def _per_seed_metric_array(self, method_name: str, metric: str) -> Optional[np.ndarray]:
+        """Stack a single numeric metric across seeds for one method.
+
+        Returns ``None`` if any seed lacks the metric or any seed errored —
+        we refuse to silently mix shapes. Pairing across methods is the
+        caller's responsibility.
+        """
+        per_seed = self._per_seed_results.get(method_name, [])
+        values: List[float] = []
+        for s in per_seed:
+            if "error" in s:
+                return None
+            v = s.get(metric)
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                return None
+            values.append(float(v))
+        if len(values) < 2:
+            return None
+        return np.asarray(values, dtype=np.float64)
+
+    @staticmethod
+    def _holm_bonferroni(p_values: np.ndarray) -> np.ndarray:
+        """Holm step-down family-wise error correction.
+
+        Adjusted p-value at sorted rank ``i`` is
+        ``min(1, max_{j<=i} (m - j + 1) * p_(j))``. NaNs are passed through
+        and ignored from the family count.
+        """
+        p = np.asarray(p_values, dtype=np.float64)
+        out = np.full(p.shape, np.nan)
+        finite = np.isfinite(p)
+        if not finite.any():
+            return out
+        idx = np.where(finite)[0]
+        order = idx[np.argsort(p[idx])]
+        m = order.size
+        sorted_p = p[order]
+        multipliers = np.arange(m, 0, -1, dtype=np.float64)
+        adjusted = np.minimum(np.maximum.accumulate(sorted_p * multipliers), 1.0)
+        out[order] = adjusted
+        return out
+
+    def _resolve_stats_tests(self) -> List[Dict[str, Any]]:
+        cfg = self.stats_cfg
+        if cfg is None:
+            return []
+        tests = OmegaConf.select(cfg, "tests", default=None) if isinstance(cfg, DictConfig) else cfg.get("tests")
+        if tests is None:
+            return list(DEFAULT_STATS_TESTS)
+        if isinstance(tests, DictConfig) or isinstance(tests, list):
+            return [
+                OmegaConf.to_container(t, resolve=True) if isinstance(t, DictConfig) else dict(t)
+                for t in tests
+            ]
+        raise TypeError(f"Unexpected stats.tests type: {type(tests)!r}")
+
+    def _run_pairwise_stats(self, datamodule: pl.LightningDataModule) -> None:
+        if self.stats_cfg is None:
+            return
+        if len(self.seeds) < 2:
+            logger.info("Skipping pairwise stat tests: n_seeds < 2.")
+            return
+
+        metric = "wer_mean"
+        if isinstance(self.stats_cfg, DictConfig):
+            metric = OmegaConf.select(self.stats_cfg, "metric", default="wer_mean")
+        elif isinstance(self.stats_cfg, dict):
+            metric = self.stats_cfg.get("metric", "wer_mean")
+
+        method_arrays: Dict[str, np.ndarray] = {}
+        for name, agg in self.results.items():
+            if "error" in agg:
+                continue
+            arr = self._per_seed_metric_array(name, metric)
+            if arr is not None:
+                method_arrays[name] = arr
+        method_names = sorted(method_arrays)
+        if len(method_names) < 2:
+            logger.info("Skipping pairwise stat tests: < 2 methods with usable metric arrays.")
+            return
+
+        train_ratio = float(getattr(datamodule, "train_ratio", 0.8))
+        val_ratio = float(getattr(datamodule, "val_ratio", 0.1))
+        test_ratio = max(1e-6, 1.0 - train_ratio - val_ratio)
+
+        test_cfgs = self._resolve_stats_tests()
+        if not test_cfgs:
+            return
+
+        all_rows: List[Dict[str, Any]] = []
+        for tcfg in test_cfgs:
+            test = instantiate(OmegaConf.create(tcfg))
+            for a, b in itertools.combinations(method_names, 2):
+                result = test.run(
+                    method_arrays[a],
+                    method_arrays[b],
+                    model_a=a,
+                    model_b=b,
+                    metric=metric,
+                    train_ratio=train_ratio,
+                    test_ratio=test_ratio,
+                )
+                row = result.to_row()
+                row["fixed_data_split"] = self.fixed_data_split
+                all_rows.append(row)
+                logger.info(test.summary(result))
+
+        if not all_rows:
+            return
+
+        df = pd.DataFrame(all_rows)
+        df["p_holm"] = self._holm_bonferroni(df["p_value"].to_numpy())
+        df["significant_holm"] = (df["p_holm"] < df.get("alpha", 0.05)).fillna(False)
+        df = df.sort_values(by=["test_name", "p_value"], na_position="last").reset_index(drop=True)
+
+        mlflow.log_table(data=df, artifact_file="results/pairwise_stat_tests.json")
+        try:
+            mlflow.log_text(
+                df.to_markdown(index=False),
+                "results/pairwise_stat_tests.md",
+            )
+        except ImportError:
+            # tabulate is an optional dep of pandas.to_markdown; skip silently.
+            pass
+
+        finite_p = df["p_value"].dropna()
+        if not finite_p.empty:
+            mlflow.log_metric("stats/min_p_value", float(finite_p.min()))
+            mlflow.log_metric("stats/n_significant", int(df["significant"].sum()))
+            mlflow.log_metric("stats/n_significant_holm", int(df["significant_holm"].sum()))
 
     @classmethod
     def reproduce_from_mlflow(

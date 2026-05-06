@@ -14,17 +14,31 @@ defaults:
 
 _target_: src.experiments.base.BaseExperiment
 parent_run_name: v1
-seed: 42 # data split seed
-seeds: [42, 0, 1, 2] # model training seeds
+# Each entry in ``seeds`` re-derives BOTH the train/val/test split and the
+# model init (the precondition for the Nadeau-Bengio corrected paired t-test).
+# Set ``fixed_data_split: true`` to revert to the legacy "split fixed at
+# ``seed``, only model varies" behaviour — but expect the stat test to log a
+# warning that its assumptions are violated in that mode.
+seed: 42 # data-split anchor (only used when fixed_data_split=true)
+seeds: [42, 0, 1, 2] # (split, model) seeds — vary together by default
+fixed_data_split: false
 
 trainer:
   max_epochs: 50
   precision: bf16-mixed
 
 data:
-  batch_size: 128
+  # Tuned for Blackwell 6000 (96 GB). Bump if you have headroom.
+  batch_size: 256
   max_seq_len: 2000
   eager_load: true
+  num_workers: 0 # eager mode keeps features in parent RAM; workers add IPC overhead.
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
 
 child_runs:
   - _target_: src.models.baselines.SingleModelBaseline

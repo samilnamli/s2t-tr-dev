@@ -9,10 +9,11 @@ exposes selector-friendly properties.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pytorch_lightning as pl
+import torch
 from torch.utils.data import DataLoader, Subset
 
 from src.data.dataset import MODEL_NAMES, ASRFeatureDataset, collate_fn
@@ -44,7 +45,11 @@ class ASRDataModule(pl.LightningDataModule):
         self.train_ratio = train_ratio
         self.val_ratio = val_ratio
         self.batch_size = batch_size
-        self.num_workers = num_workers
+        # In eager mode the features already live in parent-process RAM and are
+        # shared with workers via fork+COW, so worker IPC is pure overhead.
+        # Force ``num_workers=0`` here to avoid pickling tensors back to the
+        # main process.
+        self.num_workers = 0 if eager_load else num_workers
         self.max_seq_len = max_seq_len
         self.eager_load = eager_load
         self.seed = seed
@@ -70,8 +75,23 @@ class ASRDataModule(pl.LightningDataModule):
             max_seq_len=self.max_seq_len,
             eager_load=self.eager_load,
         )
+        self.reseed_split(self.seed)
+
+    def reseed_split(self, split_seed: int) -> None:
+        """Re-permute the train/val/test indices using a new seed.
+
+        Cheap (one ``np.permutation`` over an int array) and idempotent.
+        Crucially does **not** rebuild :class:`ASRFeatureDataset`, so the
+        heavy eager-loaded feature buffers (~38 GB on AMI) stay in RAM and
+        are shared across the per-seed runs of every method. This is what
+        makes the per-seed split refactor compatible with ``eager_load=True``
+        on Colab without re-decoding the parquet for every (method, seed).
+        """
+        if self._dataset is None:
+            self.setup()
+            return
         n = len(self._dataset)
-        rng = np.random.default_rng(self.seed)
+        rng = np.random.default_rng(int(split_seed))
         idx = rng.permutation(n).tolist()
 
         n_train = int(n * self.train_ratio)
@@ -79,6 +99,25 @@ class ASRDataModule(pl.LightningDataModule):
         self._train = Subset(self._dataset, idx[:n_train])
         self._val = Subset(self._dataset, idx[n_train : n_train + n_val])
         self._test = Subset(self._dataset, idx[n_train + n_val :])
+        self.seed = int(split_seed)
+
+    def on_after_batch_transfer(self, batch: Any, dataloader_idx: int) -> Any:  # noqa: ARG002
+        """Cast float16 hidden states to float32 once per batch on-device.
+
+        The eager-mode dataset returns float16 tensors so we don't pay a
+        per-clip CPU upcast in ``__getitem__``. Lightning's
+        ``transfer_batch_to_device`` has already moved the batch to the
+        accelerator at this point, so the cast happens on GPU and is
+        essentially free compared to the avoided CPU work.
+        """
+        if isinstance(batch, dict):
+            hs = batch.get("hidden_states")
+            if isinstance(hs, dict):
+                batch["hidden_states"] = {
+                    k: (v.float() if v.dtype == torch.float16 else v)
+                    for k, v in hs.items()
+                }
+        return batch
 
     def _loader(self, subset: Subset, *, shuffle: bool) -> DataLoader:
         return DataLoader(

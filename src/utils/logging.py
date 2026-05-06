@@ -97,6 +97,23 @@ _DEFAULT_FORMAT = (
 )
 
 
+def _tqdm_aware_stderr_sink(message: str) -> None:
+    """Write log records through ``tqdm.write`` so progress bars don't break.
+
+    When a tqdm bar is active on stderr, naive ``sys.stderr.write`` calls
+    interleave with the bar's ``\\r`` refreshes — Colab in particular
+    "consumes" the carriage return after a stray newline and starts
+    rendering one bar line per step. ``tqdm.write`` takes the bar's
+    internal lock, clears it, prints the message, and redraws.
+    """
+    try:
+        from tqdm.auto import tqdm  # local import — tqdm may not be loaded yet
+    except ImportError:
+        sys.stderr.write(message)
+        return
+    tqdm.write(message, end="", file=sys.stderr)
+
+
 def setup_unified_logging(
     level: str = "INFO",
     log_file: Optional[Union[str, Path]] = None,
@@ -117,7 +134,14 @@ def setup_unified_logging(
         extra_silenced: Extra logger names to coerce down to WARNING.
     """
     logger.remove()
-    logger.add(sys.stderr, level=level, format=fmt, enqueue=enqueue, backtrace=False)
+    logger.add(
+        _tqdm_aware_stderr_sink,
+        level=level,
+        format=fmt,
+        enqueue=enqueue,
+        backtrace=False,
+        colorize=sys.stderr.isatty(),
+    )
     if log_file is not None:
         log_file = Path(log_file)
         log_file.parent.mkdir(parents=True, exist_ok=True)

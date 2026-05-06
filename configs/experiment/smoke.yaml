@@ -11,6 +11,10 @@ _target_: src.experiments.base.BaseExperiment
 parent_run_name: smoke_v1
 seed: 0
 seeds: [0, 1]   # exercise multi-seed aggregation in the smoke run
+# Smoke pins the split so deterministic baselines (Oracle, SingleModel)
+# yield exactly zero across-seed variance — the property the smoke test
+# asserts. The default for production experiments is ``false``.
+fixed_data_split: true
 
 trainer:
   max_epochs: 1

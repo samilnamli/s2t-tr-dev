@@ -161,24 +161,42 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
     def training_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:  # noqa: ARG002
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
+        bs = batch["wer_matrix"].size(0)
         prog = {"total_loss"}
         for k, v in metrics.items():
-            self.log(f"train/{k}", v, on_step=False, on_epoch=True, prog_bar=(k in prog))
+            self.log(
+                f"train/{k}",
+                v,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=(k in prog),
+                batch_size=bs,
+            )
         return loss
 
     def validation_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:  # noqa: ARG002
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
+        bs = batch["wer_matrix"].size(0)
         prog = {"total_loss", "selected_wer", "selection_accuracy"}
         for k, v in metrics.items():
-            self.log(f"val/{k}", v, on_epoch=True, prog_bar=(k in prog))
+            self.log(f"val/{k}", v, on_epoch=True, prog_bar=(k in prog), batch_size=bs)
         return loss
+
+    def on_test_start(self) -> None:
+        # Buffer test-time selections so ``evaluate()`` doesn't have to do a
+        # second pass over the test loader after ``trainer.test``.
+        self._test_selections: list[np.ndarray] = []
+        self._test_wer: list[np.ndarray] = []
 
     def test_step(self, batch: dict, batch_idx: int = 0) -> torch.Tensor:  # noqa: ARG002
         probs = self(batch["hidden_states"], batch["attention_masks"])
         loss, metrics = self._compute_loss(probs, batch["wer_matrix"])
+        bs = batch["wer_matrix"].size(0)
         for k, v in metrics.items():
-            self.log(f"test/{k}", v, on_epoch=True)
+            self.log(f"test/{k}", v, on_epoch=True, batch_size=bs)
+        self._test_selections.append(probs.argmax(dim=-1).detach().cpu().numpy())
+        self._test_wer.append(batch["wer_matrix"].detach().cpu().numpy())
         return loss
 
     def predict_proba(self, batch: dict) -> torch.Tensor:
@@ -263,17 +281,25 @@ class TrainableLightningSelector(BaseSelector, pl.LightningModule):
 
         lightning_metrics = getattr(self, "_last_test_results", {})
 
-        datamodule.setup("test")
-        all_idx, all_wer = [], []
-        self.eval()
-        with torch.no_grad():
-            for batch in datamodule.test_dataloader():
-                probs = self(batch["hidden_states"], batch["attention_masks"])
-                all_idx.append(probs.argmax(dim=-1).cpu().numpy())
-                all_wer.append(batch["wer_matrix"].numpy())
+        cached_sel = getattr(self, "_test_selections", None)
+        cached_wer = getattr(self, "_test_wer", None)
+        if cached_sel:
+            selected_idx = np.concatenate(cached_sel)
+            wer_matrix = np.concatenate(cached_wer, axis=0)
+        else:
+            # Fallback for code paths that bypassed ``trainer.test`` (e.g.
+            # an experiment that calls evaluate() directly without fitting).
+            datamodule.setup("test")
+            all_idx, all_wer = [], []
+            self.eval()
+            with torch.no_grad():
+                for batch in datamodule.test_dataloader():
+                    probs = self(batch["hidden_states"], batch["attention_masks"])
+                    all_idx.append(probs.argmax(dim=-1).cpu().numpy())
+                    all_wer.append(batch["wer_matrix"].numpy())
+            selected_idx = np.concatenate(all_idx)
+            wer_matrix = np.concatenate(all_wer, axis=0)
 
-        selected_idx = np.concatenate(all_idx)
-        wer_matrix = np.concatenate(all_wer, axis=0)
         model_names = list(datamodule.model_dims.keys())
         routing_metrics = SelectionMetrics.compute_all(selected_idx, wer_matrix, model_names)
         return {**lightning_metrics, **routing_metrics}
