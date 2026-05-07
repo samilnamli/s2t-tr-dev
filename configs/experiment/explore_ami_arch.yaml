@@ -1,0 +1,146 @@
+# EXPLORATORY — extended architecture ablation on AMI (3 seeds).
+# Purpose: refines the manuscript's architecture ablation table by sweeping
+#   the full design grid (bridge, share, depth, width, heads, dropout).
+#   Loss recipe held at the v1 default (1.0, 0.3, 0.5, tau=1.5).
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: explore_v1
+seed: 42
+seeds: [42, 0, 1337]
+fixed_data_split: false
+
+float32_matmul_precision: "medium"
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+data:
+  batch_size: 256
+  max_seq_len: 2000
+  eager_load: true
+  num_workers: 0
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
+
+# Shared loss recipe (matches v1 default)
+# primary=1.0, hard=0.3, soft=0.5, tau=1.5
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: default_d256_l2_l1_h4
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: no_bridge
+    use_cross_attention_bridge: false
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: no_share_stage1
+    share_stage1_weights: false
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: no_bridge_no_share
+    use_cross_attention_bridge: false
+    share_stage1_weights: false
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: stage1_layers_1
+    stage1_layers: 1
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: stage1_layers_4
+    stage1_layers: 4
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: stage2_layers_2
+    stage2_layers: 2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: d_model_128
+    d_model: 128
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: d_model_512
+    d_model: 512
+    ffn_dim: 1024
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: heads_2
+    n_heads: 2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: heads_8
+    n_heads: 8
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: dropout_0p2
+    dropout: 0.2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true

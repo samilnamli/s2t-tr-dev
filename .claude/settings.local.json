@@ -21,7 +21,8 @@
       "Read(//private/tmp/smoke_mlruns/**)",
       "Bash(rm -rf /tmp/smoke_mlruns /Users/huseyinkaraca/Desktop/s2t-tr-dev/data/processed/synthetic_regime_switch /Users/huseyinkaraca/Desktop/s2t-tr-dev/.parquet_cache)",
       "Bash(git -C /Users/huseyinkaraca/Desktop/s2t-tr-dev status --short)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "mcp__mlflow-mcp__describe_run"
     ]
   }
 }

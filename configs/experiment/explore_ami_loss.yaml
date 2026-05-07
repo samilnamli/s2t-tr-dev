@@ -1,0 +1,116 @@
+# EXPLORATORY — extended loss ablation on AMI (3 seeds each).
+# Purpose: settle the manuscript's loss-ablation narrative.
+#   Currently the table reports 5 configs; this run sweeps 10 (lambda + tau)
+#   so we can pick the strongest setting and tell a clean story about how
+#   soft-CE temperature interacts with WER vs selection accuracy.
+#
+# Time estimate: ~10 configs * 3 seeds * ~6 min = ~3 h.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: explore_v1
+seed: 42
+seeds: [42, 0, 1337]
+fixed_data_split: false
+
+float32_matmul_precision: "medium"
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+data:
+  batch_size: 256
+  max_seq_len: 2000
+  eager_load: true
+  num_workers: 0
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
+
+# All variants share the proposed HT architecture; only the loss varies.
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_wer
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_hard_ce
+    primary_weight: 0.0
+    aux_ce_weight: 1.0
+    soft_ce_weight: 0.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_soft_ce_t01
+    primary_weight: 0.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 1.0
+    soft_ce_temperature: 0.1
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: only_soft_ce_t15
+    primary_weight: 0.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 1.0
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: wer_plus_hard
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: wer_plus_soft_t01
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.1
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: wer_plus_soft_t15
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: full_recipe_t15
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: full_recipe_t05
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: heavy_soft_t05
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 1.0
+    soft_ce_temperature: 0.5
+    early_stopping_patience: 5
+    class_balanced_loss: true

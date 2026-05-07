@@ -1,0 +1,115 @@
+# EXPLORATORY — optimization sweep on AMI (3 seeds).
+# Purpose: rule out that v1's HT WER is bottlenecked by suboptimal lr/wd
+#   before we invest in arch changes. 8 cells in (lr, wd) grid.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: explore_v1
+seed: 42
+seeds: [42, 0, 1337]
+fixed_data_split: false
+
+float32_matmul_precision: "medium"
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+data:
+  batch_size: 256
+  max_seq_len: 2000
+  eager_load: true
+  num_workers: 0
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
+
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr3e5_wd1e2
+    learning_rate: 3.0e-5
+    weight_decay: 1.0e-2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr1e4_wd1e2
+    learning_rate: 1.0e-4
+    weight_decay: 1.0e-2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr3e4_wd1e2
+    learning_rate: 3.0e-4
+    weight_decay: 1.0e-2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr1e3_wd1e2
+    learning_rate: 1.0e-3
+    weight_decay: 1.0e-2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr3e4_wd0
+    learning_rate: 3.0e-4
+    weight_decay: 0.0
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr3e4_wd1e4
+    learning_rate: 3.0e-4
+    weight_decay: 1.0e-4
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: lr3e4_wd1e1
+    learning_rate: 3.0e-4
+    weight_decay: 1.0e-1
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: warmup_500
+    warmup_steps: 500
+    learning_rate: 3.0e-4
+    weight_decay: 1.0e-2
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true

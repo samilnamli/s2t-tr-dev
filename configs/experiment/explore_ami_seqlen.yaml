@@ -1,0 +1,60 @@
+# EXPLORATORY — sequence-length truncation sweep on AMI (3 seeds).
+# Purpose: directly tests the manuscript's "frame-level info matters"
+#   claim. As max_seq_len shrinks, the HT should degrade more than the
+#   MLP-pool (which always sees a single pooled vector). This is a
+#   sanity check rather than a hyperparameter tuning sweep.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: explore_v1
+seed: 42
+seeds: [42, 0, 1337]
+fixed_data_split: false
+
+float32_matmul_precision: "medium"
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+# NOTE: data.max_seq_len controls the truncation. We override per child
+# run is not possible at the data level (datamodule loads once), so this
+# YAML uses a *fixed* short length for the whole run. Launch it three
+# times with different overrides:
+#   python run.py experiment=explore_ami_seqlen data.max_seq_len=200
+#   python run.py experiment=explore_ami_seqlen data.max_seq_len=500
+#   python run.py experiment=explore_ami_seqlen data.max_seq_len=1000
+# (the 2000 case is already covered by main_results_ami v1).
+data:
+  batch_size: 256
+  max_seq_len: 500
+  eager_load: true
+  num_workers: 0
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
+
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: hierarchical_transformer
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    class_balanced_loss: true
+    early_stopping_patience: 5
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_pool_full_recipe
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    class_balanced_loss: true
+    early_stopping_patience: 5

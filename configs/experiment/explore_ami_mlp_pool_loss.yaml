@@ -1,0 +1,93 @@
+# EXPLORATORY — fair MLP-pool loss comparison on AMI (3 seeds).
+# Purpose: in v1, MLP-pool was trained with hard-CE only while HT got the
+#   full recipe. This sweep retrains MLP-pool under the *same* loss recipes
+#   the HT was trained with. If HT still wins, the gain is purely
+#   architectural; if MLP-pool catches up, the loss recipe was confounded
+#   in v1 and we need to update the manuscript narrative.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: explore_v1
+seed: 42
+seeds: [42, 0, 1337]
+fixed_data_split: false
+
+float32_matmul_precision: "medium"
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+data:
+  batch_size: 256
+  max_seq_len: 2000
+  eager_load: true
+  num_workers: 0
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
+
+child_runs:
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_only_wer
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_only_hard_ce
+    primary_weight: 0.0
+    aux_ce_weight: 1.0
+    soft_ce_weight: 0.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_only_soft_ce_t01
+    primary_weight: 0.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 1.0
+    soft_ce_temperature: 0.1
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_wer_plus_soft_t01
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.1
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_wer_plus_soft_t15
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_full_recipe
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.mlp.MLPPoolSelectorLightning
+    name: mlp_wide_full_recipe
+    d_hidden: 2048
+    n_layers: 3
+    primary_weight: 1.0
+    aux_ce_weight: 0.3
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true

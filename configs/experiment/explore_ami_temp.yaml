@@ -1,0 +1,91 @@
+# EXPLORATORY — soft-CE temperature sweep on AMI (3 seeds).
+# Purpose: amplify the soft-CE narrative with a clean monotone plot.
+#   Holds (lambda_wer, lambda_hard, lambda_soft) = (1, 0, 0.5) and varies
+#   tau in {0.1, 0.3, 0.5, 1.0, 1.5, 3.0, 5.0}.
+
+defaults:
+  - /trainer: default
+  - /data: ami
+  - _self_
+
+_target_: src.experiments.base.BaseExperiment
+parent_run_name: explore_v1
+seed: 42
+seeds: [42, 0, 1337]
+fixed_data_split: false
+
+float32_matmul_precision: "medium"
+
+trainer:
+  max_epochs: 50
+  precision: bf16-mixed
+
+data:
+  batch_size: 256
+  max_seq_len: 2000
+  eager_load: true
+  num_workers: 0
+
+stats:
+  metric: wer_mean
+  tests:
+    - _target_: src.stats.paired_t.NadeauBengioCorrectedTTest
+      alpha: 0.05
+
+child_runs:
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_0p1
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.1
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_0p3
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.3
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_0p5
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 0.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_1p0
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_1p5
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 1.5
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_3p0
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 3.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
+  - _target_: src.models.transformer.ASRModelSelectorLightning
+    name: tau_5p0
+    primary_weight: 1.0
+    aux_ce_weight: 0.0
+    soft_ce_weight: 0.5
+    soft_ce_temperature: 5.0
+    early_stopping_patience: 5
+    class_balanced_loss: true
