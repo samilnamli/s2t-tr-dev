@@ -3,6 +3,416 @@
   CTLnames_show_etal = "1"
 }
 
+@inproceedings{
+gshard,
+title={{\{}GS{\}}hard: Scaling Giant Models with Conditional Computation and Automatic Sharding},
+author={Dmitry Lepikhin and HyoukJoong Lee and Yuanzhong Xu and Dehao Chen and Orhan Firat and Yanping Huang and Maxim Krikun and Noam Shazeer and Zhifeng Chen},
+booktitle={International Conference on Learning Representations},
+year={2021},
+url={https://openreview.net/forum?id=qrwe7XHTmYb}
+}
+
+@inproceedings{cornell23_chime,
+  author    = {Samuele Cornell and Matthew S. Wiesner and Shinji Watanabe and Desh Raj and Xuankai Chang and Paola Garcia and Yoshiki Masuyam and Zhong-Qiu Wang and Stefano Squartini and Sanjeev Khudanpur},
+  title     = {The CHiME-7 DASR Challenge: Distant Meeting Transcription with Multiple Devices in Diverse Scenarios},
+  booktitle = {Proc. 7th International Workshop on Speech Processing in Everyday Environments (CHiME 2023)},
+  pages     = {1--6},
+  year      = {2023},
+  doi       = {10.21437/CHiME.2023-1}
+}
+
+@inproceedings{cornell24_chime,
+  author    = {Samuele Cornell and Tae Jin Park and He Huang and Christoph Boeddeker and Xuankai Chang and Matthew Maciejewski and Matthew S. Wiesner and Paola Garcia and Shinji Watanabe},
+  title     = {The CHiME-8 DASR Challenge for Generalizable and Array Agnostic Distant Automatic Speech Recognition and Diarization},
+  booktitle = {Proc. 8th International Workshop on Speech Processing in Everyday Environments (CHiME 2024)},
+  pages     = {1--6},
+  year      = {2024},
+  doi       = {10.21437/CHiME.2024-1}
+}
+
+@ARTICLE{li2014overviewrobust,
+  author={Li, Jinyu and Deng, Li and Gong, Yifan and Haeb-Umbach, Reinhold},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing}, 
+  title={An Overview of Noise-Robust Automatic Speech Recognition}, 
+  year={2014},
+  volume={22},
+  number={4},
+  pages={745-777},
+  keywords={Speech;Noise robustness;Acoustic distortion;Speech processing;Cepstral analysis;IEEE transactions;Speech recognition;noise, robustness;distortion modeling;compensation;uncertainty processing;joint model training},
+  doi={10.1109/TASLP.2014.2304637}}
+
+
+@inproceedings{riquelme2021vmoe,
+author = {Riquelme, Carlos and Puigcerver, Joan and Mustafa, Basil and Neumann, Maxim and Jenatton, Rodolphe and Pinto, Andr\'{e} Susano and Keysers, Daniel and Houlsby, Neil},
+title = {Scaling vision with sparse mixture of experts},
+year = {2021},
+isbn = {9781713845393},
+publisher = {Curran Associates Inc.},
+address = {Red Hook, NY, USA},
+abstract = {Sparsely-gated Mixture of Experts networks (MoEs) have demonstrated excellent scalability in Natural Language Processing. In Computer Vision, however, almost all performant networks are "dense", that is, every input is processed by every parameter. We present a Vision MoE (V-MoE), a sparse version of the Vision Transformer, that is scalable and competitive with the largest dense networks. When applied to image recognition, V-MoE matches the performance of state-of-the-art networks, while requiring as little as half of the compute at inference time. Further, we propose an extension to the routing algorithm that can prioritize subsets of each input across the entire batch, leading to adaptive per-image compute. This allows V-MoE to trade-off performance and compute smoothly at test-time. Finally, we demonstrate the potential of V-MoE to scale vision models, and train a 15B parameter model that attains 90.35\% on ImageNet.},
+booktitle = {Proceedings of the 35th International Conference on Neural Information Processing Systems},
+articleno = {657},
+numpages = {13},
+series = {NIPS '21}
+}
+
+
+
+
+@ARTICLE{yuksel2012twenty,
+  author={Yuksel, Seniha Esen and Wilson, Joseph N. and Gader, Paul D.},
+  journal={IEEE Transactions on Neural Networks and Learning Systems}, 
+  title={Twenty Years of Mixture of Experts}, 
+  year={2012},
+  volume={23},
+  number={8},
+  pages={1177-1193},
+  keywords={Bayesian methods;Hidden Markov models;Regression analysis;Support vector machines;Data models;Decision trees;Gaussian processes;Applications;Bayesian;classification;comparison;hierarchical mixture of experts (HME);mixture of Gaussian process experts;regression;statistical properties;survey;variational},
+  doi={10.1109/TNNLS.2012.2200299}}
+
+
+
+@article{jordan1994hierarchial,
+author = {Jordan, Michael I. and Jacobs, Robert A.},
+title = {Hierarchical mixtures of experts and the EM algorithm},
+year = {1994},
+issue_date = {March 1994},
+publisher = {MIT Press},
+address = {Cambridge, MA, USA},
+volume = {6},
+number = {2},
+issn = {0899-7667},
+url = {https://doi.org/10.1162/neco.1994.6.2.181},
+doi = {10.1162/neco.1994.6.2.181},
+abstract = {We present a tree-structured architecture for supervised learning. The statistical model underlying the architecture is a hierarchical mixture model in which both the mixture coefficients and the mixture components are generalized linear models (GLIM's). Learning is treated as a maximum likelihood problem; in particular, we present an Expectation-Maximization (EM) algorithm for adjusting the parameters of the architecture. We also develop an on-line learning algorithm in which the parameters are updated incrementally. Comparative simulation results are presented in the robot dynamics domain.},
+journal = {Neural Comput.},
+month = mar,
+pages = {181–214},
+numpages = {34}
+}
+
+
+
+
+@article{jacobs1991,
+    author = {Jacobs, Robert A. and Jordan, Michael I. and Nowlan, Steven J. and Hinton, Geoffrey E.},
+    title = {Adaptive Mixtures of Local Experts},
+    journal = {Neural Computation},
+    volume = {3},
+    number = {1},
+    pages = {79-87},
+    year = {1991},
+    month = {03},
+    abstract = {We present a new supervised learning procedure for systems composed of many separate networks, each of which learns to handle a subset of the complete set of training cases. The new procedure can be viewed either as a modular version of a multilayer supervised network, or as an associative version of competitive learning. It therefore provides a new link between these two apparently different approaches. We demonstrate that the learning procedure divides up a vowel discrimination task into appropriate subtasks, each of which can be solved by a very simple expert network.},
+    issn = {0899-7667},
+    doi = {10.1162/neco.1991.3.1.79},
+    url = {https://doi.org/10.1162/neco.1991.3.1.79},
+    eprint = {https://direct.mit.edu/neco/article-pdf/3/1/79/812104/neco.1991.3.1.79.pdf},
+}
+
+
+
+
+@misc{lewis2021base,
+      title={BASE Layers: Simplifying Training of Large, Sparse Models}, 
+      author={Mike Lewis and Shruti Bhosale and Tim Dettmers and Naman Goyal and Luke Zettlemoyer},
+      year={2021},
+      eprint={2103.16716},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2103.16716}, 
+}
+
+@misc{dehghani2019universal,
+  added-at = {2026-04-20T19:20:01.000+0200},
+  archiveprefix = {arXiv},
+  author = {Dehghani, Mostafa and Gouws, Stephan and Vinyals, Oriol and Uszkoreit, Jakob and Kaiser, Łukasz},
+  biburl = {https://www.bibsonomy.org/bibtex/2931a80d494133633328c6d5fb8025666/arvind1singh},
+  description = {Universal Transformers},
+  eprint = {1807.03819},
+  interhash = {480bd0fb384dd51903224b4993d1eadc},
+  intrahash = {931a80d494133633328c6d5fb8025666},
+  keywords = {ai},
+  primaryclass = {cs.CL},
+  timestamp = {2026-04-20T19:20:01.000+0200},
+  title = {Universal Transformers},
+  url = {https://arxiv.org/abs/1807.03819},
+  year = 2019
+}
+
+
+
+@inproceedings{
+elbayad2020depth,
+title={Depth-Adaptive Transformer},
+author={Maha Elbayad and Jiatao Gu and Edouard Grave and Michael Auli},
+booktitle={International Conference on Learning Representations},
+year={2020},
+url={https://openreview.net/forum?id=SJg7KhVKPH}
+}
+
+
+@article{graves2016adaptive,
+  title={Adaptive Computation Time for Recurrent Neural Networks},
+  author={Alex Graves},
+  journal={ArXiv},
+  year={2016},
+  volume={abs/1603.08983},
+  url={https://api.semanticscholar.org/CorpusID:8224916}
+}
+
+@inproceedings{xin2020deebert,
+    title = "{D}ee{BERT}: Dynamic Early Exiting for Accelerating {BERT} Inference",
+    author = "Xin, Ji  and
+      Tang, Raphael  and
+      Lee, Jaejun  and
+      Yu, Yaoliang  and
+      Lin, Jimmy",
+    editor = "Jurafsky, Dan  and
+      Chai, Joyce  and
+      Schluter, Natalie  and
+      Tetreault, Joel",
+    booktitle = "Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics",
+    month = jul,
+    year = "2020",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2020.acl-main.204/",
+    doi = "10.18653/v1/2020.acl-main.204",
+    pages = "2246--2251",
+    abstract = "Large-scale pre-trained language models such as BERT have brought significant improvements to NLP applications. However, they are also notorious for being slow in inference, which makes them difficult to deploy in real-time applications. We propose a simple but effective method, DeeBERT, to accelerate BERT inference. Our approach allows samples to exit earlier without passing through the entire model. Experiments show that DeeBERT is able to save up to {\textasciitilde}40{\%} inference time with minimal degradation in model quality. Further analyses show different behaviors in the BERT transformer layers and also reveal their redundancy. Our work provides new ideas to efficiently apply deep transformer-based models to downstream tasks. Code is available at \url{https://github.com/castorini/DeeBERT}."
+}
+
+@inproceedings{huang2018msdnet,
+author = {Zhang, Hui and Zhao, Xiao and Yang, Chen and Li, Yuechen and Wang, Ruonan},
+title = {MSDNet: Multi-scale Dense Networks for&nbsp;Salient Object Detection},
+year = {2022},
+isbn = {978-3-031-18915-9},
+publisher = {Springer-Verlag},
+address = {Berlin, Heidelberg},
+url = {https://doi.org/10.1007/978-3-031-18916-6_26},
+doi = {10.1007/978-3-031-18916-6_26},
+abstract = {Since the fully convolutional networks was proposed, it has made great progress in the salient object detection. However, this kind of network structure still has obvious problems of incomplete salient objects segmentation and redundant information. Therefore, this paper propose a novel network model named Multi-scale Dense Network (MSDNet) to solve the above problems. First, we designed a multi-receptive enhancement and supplementation module(MRES), which increases the discriminability of features through feature interaction under different receptive fields. Second, we design a network framework MSDNet that first uses dense feature interactions and a pyramid-shaped feature fusion structure to get enhanced features and better features fusion. Experimental results on five benchmark datasets demonstrate the proposed method against 11 state-of-the-art approaches, it can effectively improve the completeness of salient objects and suppress background information.},
+booktitle = {Pattern Recognition and Computer Vision: 5th Chinese Conference, PRCV 2022, Shenzhen, China, November 4–7, 2022, 2022, Proceedings, Part IV},
+pages = {315–324},
+numpages = {10},
+keywords = {Fully convolutional network, Multi-scales feature fusion, Salient object detection},
+location = {Shenzhen, China}
+}
+
+
+@INPROCEEDINGS{teerapittayanon2016branchynet,
+  author={Teerapittayanon, Surat and McDanel, Bradley and Kung, H.T.},
+  booktitle={2016 23rd International Conference on Pattern Recognition (ICPR)}, 
+  title={BranchyNet: Fast inference via early exiting from deep neural networks}, 
+  year={2016},
+  volume={},
+  number={},
+  pages={2464-2469},
+  keywords={Optimization;Entropy;Training;Feedforward neural networks;Inference algorithms;Runtime},
+  doi={10.1109/ICPR.2016.7900006}}
+
+
+@InProceedings{wang2018skipnet,
+author = {Wang, Xin and Yu, Fisher and Dou, Zi-Yi and Darrell, Trevor and Gonzalez, Joseph E.},
+title = {SkipNet: Learning Dynamic Routing in Convolutional Networks},
+booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+month = {September},
+year = {2018}
+}
+
+@INPROCEEDINGS {wu2018blockdrop,
+author = { Wu, Zuxuan and Nagarajan, Tushar and Kumar, Abhishek and Rennie, Steven and Davis, Larry S. and Grauman, Kristen and Feris, Rogerio },
+booktitle = { 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) },
+title = {{ BlockDrop: Dynamic Inference Paths in Residual Networks }},
+year = {2018},
+volume = {},
+ISSN = {},
+pages = {8817-8826},
+abstract = { Very deep convolutional neural networks offer excellent recognition results, yet their computational expense limits their impact for many real-world applications. We introduce BlockDrop, an approach that learns to dynamically choose which layers of a deep network to execute during inference so as to best reduce total computation without degrading prediction accuracy. Exploiting the robustness of Residual Networks (ResNets) to layer dropping, our framework selects on-the-fly which residual blocks to evaluate for a given novel image. In particular, given a pretrained ResNet, we train a policy network in an associative reinforcement learning setting for the dual reward of utilizing a minimal number of blocks while preserving recognition accuracy. We conduct extensive experiments on CIFAR and ImageNet. The results provide strong quantitative and qualitative evidence that these learned policies not only accelerate inference but also encode meaningful visual information. Built upon a ResNet-101 model, our method achieves a speedup of 20% on average, going as high as 36% for some images, while maintaining the same 76.4% top-1 accuracy on ImageNet. },
+keywords = {Computational modeling;Visualization;Task analysis;Training;Computer vision;Dogs;Neural networks},
+doi = {10.1109/CVPR.2018.00919},
+url = {https://doi.ieeecomputersociety.org/10.1109/CVPR.2018.00919},
+publisher = {IEEE Computer Society},
+address = {Los Alamitos, CA, USA},
+month =Jun}
+
+
+@inproceedings{campos2018skip,
+title={Skip RNN: Learning to Skip State Updates in Recurrent Neural Networks},
+author={Campos, V{\'\i}ctor and Jou, Brendan and Gir{\'o}-i-Nieto, Xavier and Torres, Jordi and Chang, Shih-Fu},
+booktitle={International Conference on Learning Representations},
+year={2018}
+}
+
+@inproceedings{laskaridis2021adaptive,
+author = {Laskaridis, Stefanos and Kouris, Alexandros and Lane, Nicholas D.},
+title = {Adaptive Inference through Early-Exit Networks: Design, Challenges and Directions},
+year = {2021},
+isbn = {9781450385978},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3469116.3470012},
+doi = {10.1145/3469116.3470012},
+abstract = {DNNs are becoming less and less over-parametrised due to recent advances in efficient model design, through careful hand-crafted or NAS-based methods. Relying on the fact that not all inputs require the same amount of computation to yield a confident prediction, adaptive inference is gaining attention as a prominent approach for pushing the limits of efficient deployment. Particularly, early-exit networks comprise an emerging direction for tailoring the computation depth of each input sample at runtime, offering complementary performance gains to other efficiency optimisations. In this paper, we decompose the design methodology of early-exit networks to its key components and survey the recent advances in each one of them. We also position early-exiting against other efficient inference solutions and provide our insights on the current challenges and most promising future directions for research in the field.},
+booktitle = {Proceedings of the 5th International Workshop on Embedded and Mobile Deep Learning},
+pages = {1–6},
+numpages = {6},
+location = {Virtual, WI, USA},
+series = {EMDL'21}
+}
+
+
+@article{scardapane2024conditional,
+author = {Scardapane, Simone and Baiocchi, Alessandro and Devoto, Alessio and Marsocci, Valerio and Minervini, Pasquale and Pomponi, Jary},
+year = {2024},
+month = {06},
+pages = {1-16},
+title = {Conditional computation in neural networks: Principles and research trends},
+volume = {18},
+journal = {Intelligenza Artificiale},
+doi = {10.3233/IA-240035}
+}
+
+@inproceedings{
+campos2018skip,
+title={Skip {RNN}: Learning to Skip State Updates in Recurrent Neural Networks},
+author={Víctor Campos and Brendan Jou and Xavier Giró-i-Nieto and Jordi Torres and Shih-Fu Chang},
+booktitle={International Conference on Learning Representations},
+year={2018},
+url={https://openreview.net/forum?id=HkwVAXyCW},
+}
+
+
+@article{han2022dynamic,
+  title={Dynamic Neural Networks: A Survey},
+  author={Yizeng Han and Gao Huang and Shiji Song and Le Yang and Honghui Wang and Yulin Wang},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  year={2021},
+  volume={44},
+  pages={7436-7456},
+  url={https://api.semanticscholar.org/CorpusID:231855426}
+}
+
+
+@ARTICLE{hiformer,
+  author={Wu, Xixin and Lu, Hui and Li, Kun and Wu, Zhiyong and Liu, Xunying and Meng, Helen},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing}, 
+  title={Hiformer: Sequence Modeling Networks With Hierarchical Attention Mechanisms}, 
+  year={2023},
+  volume={31},
+  number={},
+  pages={3993-4003},
+  keywords={Transformers;Decoding;Task analysis;Machine translation;Training;Semantics;Computational modeling;Hierarchical attention mechanism;transformer;automatic speech recognition;neural machine translation},
+  doi={10.1109/TASLP.2023.3313428}}
+
+
+@ARTICLE{gong_advanced,
+  author={Gong, Xun and Wu, Yu and Li, Jinyu and Liu, Shujie and Zhao, Rui and Chen, Xie and Qian, Yanmin},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing}, 
+  title={Advanced Long-Content Speech Recognition With Factorized Neural Transducer}, 
+  year={2024},
+  volume={32},
+  number={},
+  pages={1803-1815},
+  keywords={Transducers;Predictive models;Vocabulary;Computer architecture;Acoustics;Context modeling;Transformers;Factorized neural transducer;long-content speech recognition;RNN-T;streaming and non-streaming},
+  doi={10.1109/TASLP.2024.3350893}}
+
+@ARTICLE{lee_mle,
+  author={Lee, Hyeonseung and Yoon, Ji Won and Kim, Sungsoo and Kim, Nam Soo},
+  journal={IEEE Signal Processing Letters}, 
+  title={Towards Maximum Likelihood Training for Transducer-Based Streaming Speech Recognition}, 
+  year={2025},
+  volume={32},
+  number={},
+  pages={26-30},
+  keywords={Transducers;Training;Accuracy;Neural networks;Deformable models;Mathematical models;Context modeling;Bayes methods;Maximum likelihood estimation;Dynamic programming;RNN-transducer (RNN-T);transducer neural network;automatic speech recognition (ASR);streaming ASR},
+  doi={10.1109/LSP.2024.3491019}}
+
+
+@ARTICLE{bigssl,
+  author={Zhang, Yu and Park, Daniel S. and Han, Wei and Qin, James and Gulati, Anmol and Shor, Joel and Jansen, Aren and Xu, Yuanzhong and Huang, Yanping and Wang, Shibo and Zhou, Zongwei and Li, Bo and Ma, Min and Chan, William and Yu, Jiahui and Wang, Yongqiang and Cao, Liangliang and Sim, Khe Chai and Ramabhadran, Bhuvana and Sainath, Tara N. and Beaufays, Françoise and Chen, Zhifeng and Le, Quoc V. and Chiu, Chung-Cheng and Pang, Ruoming and Wu, Yonghui},
+  journal={IEEE Journal of Selected Topics in Signal Processing}, 
+  title={BigSSL: Exploring the Frontier of Large-Scale Semi-Supervised Learning for Automatic Speech Recognition}, 
+  year={2022},
+  volume={16},
+  number={6},
+  pages={1519-1532},
+  keywords={Automatic speech recognition;Training;Benchmark testing;Semisupervised learning;Speech recognition;Giant model;large-scale self-supervisedlearning;self-supervised learning;semisupervised learning;speech recognition},
+  doi={10.1109/JSTSP.2022.3182537}}
+
+
+@ARTICLE{deng_conf,
+  author={Deng, Jiajun and Xie, Xurong and Wang, Tianzi and Cui, Mingyu and Xue, Boyang and Jin, Zengrui and Li, Guinan and Hu, Shujie and Liu, Xunying},
+  journal={IEEE/ACM Transactions on Audio, Speech, and Language Processing}, 
+  title={Confidence Score Based Speaker Adaptation of Conformer Speech Recognition Systems}, 
+  year={2023},
+  volume={31},
+  number={},
+  pages={1175-1190},
+  keywords={Adaptation models;Hidden Markov models;Data models;Acoustics;Transformers;Switches;Task analysis;Speech recognition;speaker adaptation;confidence score estimation;bayesian learning;conformer},
+  doi={10.1109/TASLP.2023.3250842}}
+
+
+@ARTICLE{hinton_deepn,
+  author={Hinton, Geoffrey and Deng, Li and Yu, Dong and Dahl, George E. and Mohamed, Abdel-rahman and Jaitly, Navdeep and Senior, Andrew and Vanhoucke, Vincent and Nguyen, Patrick and Sainath, Tara N. and Kingsbury, Brian},
+  journal={IEEE Signal Processing Magazine}, 
+  title={Deep Neural Networks for Acoustic Modeling in Speech Recognition: The Shared Views of Four Research Groups}, 
+  year={2012},
+  volume={29},
+  number={6},
+  pages={82-97},
+  keywords={Automatic speech recognition;Speech recognition;Hidden Markov models;Training;Gaussian processes;Acoustics;Neural networks;Data models},
+  doi={10.1109/MSP.2012.2205597}}
+
+
+
+@ARTICLE{dahl_context,
+  author={Dahl, George E. and Yu, Dong and Deng, Li and Acero, Alex},
+  journal={IEEE Transactions on Audio, Speech, and Language Processing}, 
+  title={Context-Dependent Pre-Trained Deep Neural Networks for Large-Vocabulary Speech Recognition}, 
+  year={2012},
+  volume={20},
+  number={1},
+  pages={30-42},
+  keywords={Hidden Markov models;Artificial neural networks;Training;Speech recognition;Context modeling;Acoustics;Mathematical model;Artificial neural network–hidden Markov model (ANN-HMM);context-dependent phone;deep belief network;deep neural network hidden Markov model (DNN-HMM);speech recognition;large-vocabulary speech recognition (LVSR)},
+  doi={10.1109/TASL.2011.2134090}}
+
+
+
+@article{roy-efficient,
+    title = "Efficient Content-Based Sparse Attention with Routing Transformers",
+    author = "Roy, Aurko  and
+      Saffar, Mohammad  and
+      Vaswani, Ashish  and
+      Grangier, David",
+    editor = "Roark, Brian  and
+      Nenkova, Ani",
+    journal = "Transactions of the Association for Computational Linguistics",
+    volume = "9",
+    year = "2021",
+    address = "Cambridge, MA",
+    publisher = "MIT Press",
+    url = "https://aclanthology.org/2021.tacl-1.4/",
+    doi = "10.1162/tacl_a_00353",
+    pages = "53--68",
+    abstract = "Self-attention has recently been adopted for a wide range of sequence modeling problems. Despite its effectiveness, self-attention suffers from quadratic computation and memory requirements with respect to sequence length. Successful approaches to reduce this complexity focused on attending to local sliding windows or a small set of locations independent of content. Our work proposes to learn dynamic sparse attention patterns that avoid allocating computation and memory to attend to content unrelated to the query of interest. This work builds upon two lines of research: It combines the modeling flexibility of prior work on content-based sparse attention with the efficiency gains from approaches based on local, temporal sparse attention. Our model, the Routing Transformer, endows self-attention with a sparse routing module based on online k-means while reducing the overall complexity of attention to O(n1.5d) from O(n2d) for sequence length n and hidden dimension d. We show that our model outperforms comparable sparse attention models on language modeling on Wikitext-103 (15.8 vs 18.3 perplexity), as well as on image generation on ImageNet-64 (3.43 vs 3.44 bits/dim) while using fewer self-attention layers. Additionally, we set a new state-of-the-art on the newly released PG-19 data-set, obtaining a test perplexity of 33.2 with a 22 layer Routing Transformer model trained on sequences of length 8192. We open-source the code for Routing Transformer in Tensorflow.1"
+}
+
+
+
+@INPROCEEDINGS{speechmoe2,
+  author={You, Zhao and Feng, Shulin and Su, Dan and Yu, Dong},
+  booktitle={ICASSP 2022 - 2022 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}, 
+  title={Speechmoe2: Mixture-of-Experts Model with Improved Routing}, 
+  year={2022},
+  volume={},
+  number={},
+  pages={7217-7221},
+  keywords={Error analysis;Computational modeling;Speech recognition;Computer architecture;Signal processing;Routing;Acoustics;mixture of experts;router architecture;domain embedding;accent embedding;global information},
+  doi={10.1109/ICASSP43922.2022.9747065}}
+
+
 @article{boersma2001praat,
 author = {Boersma, Paul and Weenink, David},
 year = {2001},
