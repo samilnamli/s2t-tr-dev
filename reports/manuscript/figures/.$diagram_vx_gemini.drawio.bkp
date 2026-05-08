@@ -1,0 +1,164 @@
+<mxfile host="app.diagrams.net" modified="2026-04-26T00:00:00.000Z" agent="manual" version="22.0.0" type="device">
+  <diagram name="Hierarchical Router" id="hier-router">
+    <mxGraphModel dx="1600" dy="1200" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1150" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ========== Title ========== -->
+        <mxCell id="title" value="Hierarchical Transformer Router for ASR Model Selection" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="280" y="20" width="940" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ========== Audio clip ========== -->
+        <mxCell id="audio" value="&lt;b&gt;Audio clip&lt;/b&gt;&#10;&lt;i&gt;x&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="680" y="70" width="140" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ========== Three base encoders (Grayscale) ========== -->
+        <mxCell id="enc1" value="&lt;b&gt;HuBERT-Large&lt;/b&gt; encoder&lt;br&gt;hidden dim D&lt;sub&gt;1&lt;/sub&gt; = 1024" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="120" y="160" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="enc2" value="&lt;b&gt;Whisper-base&lt;/b&gt; encoder&lt;br&gt;hidden dim D&lt;sub&gt;2&lt;/sub&gt; = 512" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="640" y="160" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="enc3" value="&lt;b&gt;W2V2-Large-Robust&lt;/b&gt; encoder&lt;br&gt;hidden dim D&lt;sub&gt;3&lt;/sub&gt; = 1024" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#333333;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="160" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ========== Audio to Encoders Edges ========== -->
+        <mxCell id="ea1" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="audio" target="enc1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ea2" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="audio" target="enc2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ea3" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="audio" target="enc3"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ========== 2-D frame-level embedding tensors ========== -->
+        <mxCell id="emb1" value="&lt;b&gt;Frame-level embedding&lt;/b&gt;&lt;br&gt;shape: T&lt;sub&gt;1&lt;/sub&gt; × 1024" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1.5;dashed=1;fontFamily=Times New Roman;fontSize=12;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="270" width="340" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="emb2" value="&lt;b&gt;Frame-level embedding&lt;/b&gt;&lt;br&gt;shape: T&lt;sub&gt;2&lt;/sub&gt; × 512" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1.5;dashed=1;fontFamily=Times New Roman;fontSize=12;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="660" y="270" width="180" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="emb3" value="&lt;b&gt;Frame-level embedding&lt;/b&gt;&lt;br&gt;shape: T&lt;sub&gt;3&lt;/sub&gt; × 1024" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1.5;dashed=1;fontFamily=Times New Roman;fontSize=12;verticalAlign=top;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="270" width="340" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- Encoder -> embedding edges -->
+        <mxCell id="ee1" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="enc1" target="emb1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ee2" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="enc2" target="emb2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="ee3" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="enc3" target="emb3"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Note about variable D_k -->
+        <mxCell id="note2d" value="2-D frame-level tensors are preserved (no temporal pooling). Each encoder may have a different hidden dimension D&lt;sub&gt;k&lt;/sub&gt; and frame count T&lt;sub&gt;k&lt;/sub&gt;." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;fontFamily=Times New Roman;fontSize=12;dashed=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="380" y="410" width="740" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ========== Stage 1 (Main Contribution) ========== -->
+        <mxCell id="stage1" value="&lt;b&gt;Stage 1 — Per-Expert Temporal Encoder&lt;/b&gt;&lt;br&gt;Per-encoder linear projection W&lt;sub&gt;p&lt;/sub&gt;&lt;sup&gt;(k)&lt;/sup&gt;: ℝ&lt;sup&gt;D&lt;sub&gt;k&lt;/sub&gt;&lt;/sup&gt; → ℝ&lt;sup&gt;d&lt;/sup&gt; · sinusoidal positional encoding · model-identity embedding e&lt;sub&gt;k&lt;/sub&gt;&lt;br&gt;Shared-weight Transformer encoder applied independently to each expert&#39;s projected sequence; output of the prepended CLS token serves as the per-expert summary." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#004085;strokeWidth=2;fontFamily=Times New Roman;fontSize=13;verticalAlign=middle;align=center;" vertex="1" parent="1">
+          <mxGeometry x="120" y="490" width="1260" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="es1a" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="emb1" target="stage1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="es1b" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="emb2" target="stage1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="es1c" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="emb3" target="stage1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ========== Per-expert summaries ========== -->
+        <mxCell id="h1" value="summary&lt;br&gt;c&#771;&lt;sub&gt;1&lt;/sub&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#004085;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="630" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="h2" value="summary&lt;br&gt;c&#771;&lt;sub&gt;2&lt;/sub&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#004085;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="630" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="h3" value="summary&lt;br&gt;c&#771;&lt;sub&gt;3&lt;/sub&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#004085;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1160" y="630" width="120" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s1h1" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;exitX=0.2;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="stage1" target="h1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s1h2" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="stage1" target="h2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s1h3" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;exitX=0.8;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="stage1" target="h3"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ========== Cross-attention bridge ========== -->
+        <mxCell id="bridge" value="&lt;b&gt;Cross-attention bridge&lt;/b&gt; (optional) — each summary c&#771;&lt;sub&gt;k&lt;/sub&gt; attends to the frame-level outputs of the other experts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1;fontFamily=Times New Roman;fontSize=12;dashed=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="220" y="710" width="1060" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="bh1" style="endArrow=block;html=1;rounded=0;strokeWidth=1;dashed=1;endFill=1;exitX=0.1;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="bridge" target="h1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="bh2" style="endArrow=block;html=1;rounded=0;strokeWidth=1;dashed=1;endFill=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="bridge" target="h2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="bh3" style="endArrow=block;html=1;rounded=0;strokeWidth=1;dashed=1;endFill=1;exitX=0.9;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="bridge" target="h3"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ========== Stage 2 ========== -->
+        <mxCell id="stage2" value="&lt;b&gt;Stage 2 — Cross-Expert Fusion&lt;/b&gt;&lt;br&gt;Transformer encoder over (global CLS, c&#771;&lt;sub&gt;1&lt;/sub&gt;, c&#771;&lt;sub&gt;2&lt;/sub&gt;, c&#771;&lt;sub&gt;3&lt;/sub&gt;) → updated global CLS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#004085;strokeWidth=2;fontFamily=Times New Roman;fontSize=13;align=center;" vertex="1" parent="1">
+          <mxGeometry x="320" y="780" width="860" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="hs2a" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="h1" target="stage2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="hs2b" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="h2" target="stage2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="hs2c" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="h3" target="stage2"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ============================================================== -->
+        <!-- ========== CLASSIFIER (WITH MICRO-VISUALS ENTEGRATED) ========== -->
+        <!-- ============================================================== -->
+
+        <!-- Container -->
+        <mxCell id="cls" value="&lt;b&gt;MLP classifier → softmax → argmax&lt;/b&gt;&lt;br&gt;&lt;i&gt;routing distribution w over K experts; selected expert index j&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#004085;strokeWidth=1.5;fontFamily=Times New Roman;fontSize=13;verticalAlign=top;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="450" y="870" width="600" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="s2cls" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="stage2" target="cls"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- 1. MLP VISUAL (Nodes & Edges) -->
+        <mxCell id="n_i1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="560" y="910" width="10" height="10" as="geometry" /></mxCell>
+        <mxCell id="n_i2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="560" y="925" width="10" height="10" as="geometry" /></mxCell>
+        <mxCell id="n_i3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="560" y="940" width="10" height="10" as="geometry" /></mxCell>
+        <mxCell id="n_o1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="610" y="910" width="10" height="10" as="geometry" /></mxCell>
+        <mxCell id="n_o2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="610" y="925" width="10" height="10" as="geometry" /></mxCell>
+        <mxCell id="n_o3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="610" y="940" width="10" height="10" as="geometry" /></mxCell>
+
+        <mxCell id="e1" edge="1" parent="1" source="n_i1" target="n_o1" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e2" edge="1" parent="1" source="n_i1" target="n_o2" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e3" edge="1" parent="1" source="n_i2" target="n_o2" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e4" edge="1" parent="1" source="n_i2" target="n_o3" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e5" edge="1" parent="1" source="n_i3" target="n_o1" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e6" edge="1" parent="1" source="n_i3" target="n_o3" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+
+        <mxCell id="arr1" value="" style="shape=flexArrow;endArrow=classic;html=1;fillColor=#e0e0e0;strokeColor=none;width=4;endSize=4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="640" y="930" as="sourcePoint"/><mxPoint x="670" y="930" as="targetPoint"/></mxGeometry>
+        </mxCell>
+
+        <!-- 2. SOFTMAX VISUAL (Probabilities) -->
+        <mxCell id="sm_lbl" value="w =" style="text;html=1;align=right;verticalAlign=middle;fontFamily=Times New Roman;fontStyle=2;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="680" y="920" width="30" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="sm_1" value="0.1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="720" y="900" width="35" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="sm_2" value="0.7" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=2;fontSize=11;fontFamily=Times New Roman;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="920" width="35" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="sm_3" value="0.2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=11;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="720" y="940" width="35" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="arr2" value="" style="shape=flexArrow;endArrow=classic;html=1;fillColor=#e0e0e0;strokeColor=none;width=4;endSize=4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="775" y="930" as="sourcePoint"/><mxPoint x="805" y="930" as="targetPoint"/></mxGeometry>
+        </mxCell>
+
+        <!-- 3. ARGMAX VISUAL -->
+        <mxCell id="am_box" value="j = 2" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontFamily=Times New Roman;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="830" y="912" width="60" height="35" as="geometry" />
+        </mxCell>
+
+        <!-- ============================================================== -->
+        <!-- ========== Decode + final output ========== -->
+        <!-- ============================================================== -->
+        <mxCell id="decode" value="&lt;b&gt;Decode only A&lt;sub&gt;j&lt;/sub&gt;(x)&lt;/b&gt; (run the full STT pipeline of the chosen expert) → final transcription T&#770;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=2;fontFamily=Times New Roman;fontSize=13;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="400" y="1000" width="700" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cls_dec" style="endArrow=block;html=1;rounded=0;strokeWidth=1.5;endFill=1;" edge="1" parent="1" source="cls" target="decode"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ========== Color legend ========== -->
+        <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;: yellow = pretrained encoders · purple = 2-D frame-level embeddings · pink = Stage 1 (per-expert) and bridge · blue = summaries / Stage 2 / classifier · green = decoded expert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;strokeWidth=1;fontFamily=Times New Roman;fontSize=10;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1080" width="1380" height="30" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

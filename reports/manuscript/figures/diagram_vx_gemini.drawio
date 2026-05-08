@@ -1,0 +1,77 @@
+<mxfile version="22.0.0">
+  <diagram id="micro-visual-cls" name="Classifier">
+    <mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="800" pageHeight="400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ========== Main Classifier Container ========== -->
+        <mxCell id="new_cls" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8fbff;strokeColor=#004085;strokeWidth=1.5;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="600" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- ========== Title ========== -->
+        <mxCell id="cls_text" value="&lt;b&gt;MLP classifier → softmax → argmax&lt;/b&gt;&lt;br&gt;&lt;i&gt;routing distribution w over K experts; selected expert index j&lt;/i&gt;" style="text;html=1;align=center;verticalAlign=top;fontFamily=Times New Roman;fontSize=13;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="600" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ========================================== -->
+        <!-- 1. MLP VISUAL (Nodes and Edges)            -->
+        <!-- ========================================== -->
+        <!-- Input Layer Nodes -->
+        <mxCell id="n_i1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="190" y="155" width="12" height="12" as="geometry" /></mxCell>
+        <mxCell id="n_i2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="190" y="172" width="12" height="12" as="geometry" /></mxCell>
+        <mxCell id="n_i3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="190" y="189" width="12" height="12" as="geometry" /></mxCell>
+        <!-- Output Layer Nodes -->
+        <mxCell id="n_o1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="250" y="155" width="12" height="12" as="geometry" /></mxCell>
+        <mxCell id="n_o2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="250" y="172" width="12" height="12" as="geometry" /></mxCell>
+        <mxCell id="n_o3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="250" y="189" width="12" height="12" as="geometry" /></mxCell>
+        <!-- Connecting Edges (Stylized) -->
+        <mxCell id="e1" edge="1" parent="1" source="n_i1" target="n_o1" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e2" edge="1" parent="1" source="n_i1" target="n_o2" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e3" edge="1" parent="1" source="n_i2" target="n_o2" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e4" edge="1" parent="1" source="n_i2" target="n_o3" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e5" edge="1" parent="1" source="n_i3" target="n_o1" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+        <mxCell id="e6" edge="1" parent="1" source="n_i3" target="n_o3" style="endArrow=none;strokeColor=#cccccc;strokeWidth=1.5;" />
+
+        <!-- Transition Arrow 1 -->
+        <mxCell id="arr1" value="" style="shape=flexArrow;endArrow=classic;html=1;fillColor=#e0e0e0;strokeColor=none;width=4;endSize=4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="300" y="178" as="sourcePoint"/><mxPoint x="340" y="178" as="targetPoint"/></mxGeometry>
+        </mxCell>
+
+        <!-- ========================================== -->
+        <!-- 2. SOFTMAX VISUAL (Probability Vector)     -->
+        <!-- ========================================== -->
+        <!-- Vector Label -->
+        <mxCell id="sm_lbl" value="w =" style="text;html=1;align=right;verticalAlign=middle;fontFamily=Times New Roman;fontStyle=2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="340" y="165" width="30" height="20" as="geometry" />
+        </mxCell>
+        <!-- Box 1 (Low Prob) -->
+        <mxCell id="sm_1" value="0.1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="380" y="145" width="40" height="20" as="geometry" />
+        </mxCell>
+        <!-- Box 2 (High Prob - Winner) -->
+        <mxCell id="sm_2" value="0.7" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#004085;strokeWidth=2;fontSize=10;fontFamily=Times New Roman;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="165" width="40" height="20" as="geometry" />
+        </mxCell>
+        <!-- Box 3 (Low Prob) -->
+        <mxCell id="sm_3" value="0.2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=10;fontFamily=Times New Roman;" vertex="1" parent="1">
+          <mxGeometry x="380" y="185" width="40" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Transition Arrow 2 -->
+        <mxCell id="arr2" value="" style="shape=flexArrow;endArrow=classic;html=1;fillColor=#e0e0e0;strokeColor=none;width=4;endSize=4;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="460" y="178" as="sourcePoint"/><mxPoint x="500" y="178" as="targetPoint"/></mxGeometry>
+        </mxCell>
+
+        <!-- ========================================== -->
+        <!-- 3. ARGMAX VISUAL (Selected Index)          -->
+        <!-- ========================================== -->
+        <mxCell id="am_box" value="j = 2" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontFamily=Times New Roman;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="530" y="160" width="60" height="35" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
