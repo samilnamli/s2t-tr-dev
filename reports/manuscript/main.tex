@@ -19,12 +19,8 @@
 
 \usetikzlibrary{arrows.meta,positioning}
 
-% \title{Frame-Level Hierarchical Routing for Adaptive Speech-to-Text Model Selection}
-% Alternative title candidates:
-\title{Hierarchical Transformer Routing over Frame-Level Encoder Embeddings for Adaptive ASR}
-% \title{Adaptive ASR Model Selection via Per-Clip Routing on Frame-Level Encoder Outputs}
-% \title{Routing Among Pretrained ASR Experts Using Frame-Level Encoder Representations}
-% \title{A Hierarchical Transformer Router for Per-Clip Selection Among Pretrained ASR Models}
+\title{HIT-ASR: Hierarchical Transformer Routing for Adaptive ASR Expert Selection}
+
 \author{A.~Samil~Namli$^{*}$, 
         Huseyin~Karaca$^{*}$,
         and Suleyman S.~Kozat,~\IEEEmembership{Senior~Member,~IEEE}
@@ -55,130 +51,25 @@ models.
 
 \subsection{Background}
 
-Automatic speech recognition (ASR, also referred to as speech-to-text) has progressed significantly with deep sequence models. The Transformer architecture \cite{vaswani2017attention}
- and its convolution-augmented variant, the Conformer \cite{gulati2020conformer}, now achieve state-of-the-art accuracy on benchmarks such as LibriSpeech, outperforming recurrent and CNN models. Self-supervised pretraining \cite{baevski2020wav2vec} further boosts accuracy, and streaming architectures like the RNN-Transducer \cite{Graves2012SequenceTW}, and its Transformer-based extensions enable low-latency transcription. However, these systems are static: they use a fixed model for all inputs. In realistic deployments, acoustic conditions such as noise, channel and speaker can vary unpredictably over time. A static model may be suboptimal across domains or may waste capacity on easy inputs. Consequently, no single ASR system is optimal across all scenarios. Different models excel in different acoustic regimes, forming a complementary set of experts. Leveraging this diversity requires an adaptive mechanism to select the most suitable model for each input, rather than committing to a fixed system. Such adaptive strategies aim to retain the efficiency of single-model inference while benefiting from the diversity of multiple pretrained systems.
+Automatic speech recognition (ASR, also referred to as speech-to-text) has progressed significantly with deep sequence models \cite{hinton_deepn,dahl_context,deng_conf}. The Transformer architecture \cite{vaswani2017attention} and its convolution-augmented variant, the Conformer \cite{gulati2020conformer}, now achieve state-of-the-art accuracy on benchmarks such as LibriSpeech, outperforming recurrent and CNN models \cite{deng_conf,bigssl}. Self-supervised pretraining \cite{baevski2020wav2vec,hsu2021hubert,chen2022wavlm} further boosts accuracy, and streaming architectures like the RNN-Transducer \cite{Graves2012SequenceTW}, and its Transformer-based extensions enable low-latency transcription \cite{gong_advanced,lee_mle}. However, these systems are static because they use a fixed model for all inputs. In realistic deployments, acoustic conditions such as noise, channel and speaker can vary unpredictably over time. A static model may be suboptimal across domains or may waste capacity on easy inputs. Consequently, no single ASR system is optimal across all scenarios \cite{li2014overviewrobust,cornell23_chime,cornell24_chime}. Different models perform better in different acoustic regimes, forming a complementary set of experts. Using this diversity requires an adaptive mechanism to select the most suitable model for each input, rather than committing to a fixed system.
 
-A key difficulty in this setting is predicting the performance of
-candidate models without explicitly executing them. Observable
-properties of the audio signal, such as acoustic statistics, temporal
-dynamics, and learned representations, provide useful cues for this
-purpose. Nevertheless, many existing approaches summarize an audio
-clip into a single pooled descriptor before predicting which expert
-to use. This compression discards information that is intrinsic to
-speech: each clip is itself a temporal signal whose acoustic
-properties evolve from frame to frame.
+A key difficulty in this setting is predicting the performance of candidate models without explicitly executing them. Observable features of the audio signal, such as acoustic statistics, temporal dynamics, and learned representations, provide useful cues for this purpose \cite{hsu2021hubert,li2014overviewrobust}. Nevertheless, many existing approaches summarize an audio
+clip into a single pooled descriptor before predicting which expert to use. This compression discards information that is intrinsic to speech: each clip is itself a temporal signal whose acoustic properties evolve from frame to frame. Within a single clip, the speaker, the channel, the background, and the spoken content are rarely homogeneous. For example, a single meeting utterance may contain both overlapping speech and clean segments. A parliamentary recording may include near-field and reverberant conditions, while a conversation's speaking rate or emotion may change. The expert that transcribes such a clip most accurately is typically determined by these intra-clip dynamics, rather than by any aggregate statistic of the clip.
 
-Within a single clip, the speaker, the channel, the background, and
-the spoken content are rarely homogeneous. For example, a single meeting utterance may contain both overlapping speech and clean segments. A parliamentary recording may include near-field and reverberant conditions, while a conversation's speaking rate or emotion may change. The expert that transcribes such a clip most
-accurately is typically determined by these intra-clip dynamics,
-rather than by any aggregate statistic of the clip.
+Neglecting these intra-clip relationships can lead to unstable or suboptimal routing behavior, particularly in long-form audio where conditions vary within an utterance. This motivates the development of adaptive ASR frameworks that explicitly model the frame-level temporal structure of each clip when routing among experts. In this work, we
+follow this direction by formulating ASR model selection as a per-clip decision problem and introducing a hierarchical transformer router that operates directly on the frame-level encoder representations of each clip, rather than on pooled descriptors. In essence, given a long audio stream split into segments (by silence or fixed windows), the router observes embeddings of each segment (which may come from an ASR encoder or acoustic front-end) and selects the most appropriate ASR expert for that segment. A Transformer-based routing function uses self-attention over a sliding window of recent segments, capturing context such as speaker continuity or acoustic drift, to produce expert preference scores. At inference time, only the selected ASR expert is invoked for each segment so latency remains that of one model per segment  while the router adds minimal compute.
 
-Neglecting these intra-clip relationships can lead to unstable or
-suboptimal routing behavior, particularly in long-form audio where
-conditions vary within an utterance. This motivates the development of
-adaptive ASR frameworks that explicitly model the frame-level temporal
-structure of each clip when routing among experts. In this work, we
-follow this direction by formulating ASR model selection as a per-clip
-decision problem and introducing a hierarchical transformer router that
-operates directly on the frame-level encoder representations of each
-clip, rather than on pooled descriptors.
  
- %By contrast, dynamic architectures such as sparsely-gated Mixture-of-Experts (MoE) networks can adaptively allocate capacity per input \cite{you2021speechmoe,fedus2021switch}. For example, GShard showed that conditional computation can scale Transformers to hundreds of billions of parameters without raising per-token cost
- %and the Switch Transformer simplifies MoE routing to train trillion-parameter models efficiently In speech, dynamic routers have been explored: the SpeechMoE family
- %dispatches frames to expert sub-networks using a shared embedding, and a recent Streaming Conformer-MoE reduced WER by ~12\% while halving active parameters
-
-
-%Building on these ideas, we introduce a sequential ASR router that operates at the level of audio segments rather than individual frames or tokens. In essence, given a long audio stream split into segments (by silence or fixed windows), the router observes embeddings of each segment (which may come from an ASR encoder or acoustic front-end) and selects the most appropriate ASR expert for that segment. A Transformer-based routing function uses self-attention over a sliding window of recent segments, capturing context such as speaker continuity or acoustic drift, to produce expert preference scores. At inference time, only the selected ASR expert is invoked for each segment so latency remains that of one model per segment  while the router adds minimal compute.
-
 \subsection{Related Work}
 \label{sec:related_work}
 
-Modern end-to-end ASR often uses attention-based encoder-decoder or transducer models. The original Transformer eliminated recurrence in sequence-to-sequence tasks and has been widely adapted for speech. In ASR, the Conformer architecture augments self-attention with convolutional modules to better model local speech structure; it achieved near-state-of-the-art LibriSpeech WERs (2.1\% clean, 4.3\% other) while remaining compact. Self-supervised pretraining (e.g. wav2vec 2.0) learns useful speech representations, allowing models to reach very low error rates with limited labels. Streaming extensions include the RNN-Transducer and Transformer-Transducer models (which combine attention with transducer output), as well as chunk-based Conformers for real-time use. These models focus on accuracy and (for streaming ones) low latency, but remain static in that all inputs use the same network.
+Modern end-to-end ASR often uses attention-based encoder-decoder or transducer models \cite{deng_conf}. The original Transformer \cite{vaswani2017attention} eliminated recurrence in sequence-to-sequence tasks and has been widely adapted for speech. In ASR, the Conformer architecture \cite{gulati2020conformer} augments self-attention with convolutional modules to better model local speech structure. It achieved near-state-of-the-art LibriSpeech WERs (2.1\% clean, 4.3\% other) while remaining compact \cite{gulati2020conformer}. Self-supervised pretraining methods, such as wav2vec 2.0 \cite{baevski2020wav2vec}, learn useful speech representations from unlabeled audio, enabling strong ASR performance even with limited labeled data. Streaming extensions include the RNN-Transducer \cite{Graves2012SequenceTW}, Transformer-Transducer models that incorporate attention-based components into the transducer framework, and chunk-based Conformers designed for real-time recognition. These models primarily focus on improving accuracy and, in streaming settings, reducing latency, but they remain static because all inputs are processed by the same network. Our work is orthogonal to these approaches. Rather than modifying the internal architecture of a single ASR model, we route each audio clip to one of several pretrained ASR systems and decode only with the selected model. As a result, the decoding cost remains comparable to that of a single ASR model, while preserving the diversity of the expert pool.
 
-Latency-Constrained ASR. Streaming variants such as the RNN-T and
-Transformer/Conformer transducers (e.g.\ Emformer, Streaming
-Transformer-Transducer) optimize the encoder architecture to meet
-real-time budgets but do not adapt computation per input. Our work
-is orthogonal: instead of changing the inner workings of a single
-model, we route a clip to one of several pretrained ASR systems and
-decode only that one. The decoding cost therefore matches that of a
-single ASR model, while the diversity of the expert pool is
-preserved.
+Adaptive expert selection is also closely related to the broader literature on mixture-of-experts (MoE) \cite{jacobs1991,jordan1994hierarchial,yuksel2012twenty}. Modern sparse deep MoE models enabled enormous capacity by routing each token to a sparse subset of experts \cite{shazeer2017outrageously}. This idea was scaled in GShard \cite{gshard} and Switch Transformer \cite{fedus2021switch}, where models with hundreds of billions of parameters were trained with sparsely-gated MoE layers at constant cost. Beyond NLP, MoE has been applied in vision and other domains as well \cite{yuksel2012twenty,riquelme2021vmoe}. There is growing work on adaptive or multi-domain ASR. SpeechMoE \cite{you2021speechmoe} adds MoE layers to a CTC model with a learned embedding for the router. This approach achieved substantial CER reductions (7--23\% relative) over a static model by dynamically routing frames to experts \cite{you2021speechmoe}. A follow-up SpeechMoE2 \cite{speechmoe2} improved routing by feeding domain- and accent-embeddings to the router. \cite{hu2023moeconformer} introduced a Switch-Conformer MoE, a multilingual
+streaming Conformer with MoE FFN layers, reporting an $11.9\%$ relative WER drop while activating only $53\%$ of parameters at inference. Our router differs from these methods in both granularity and scope. Whereas SpeechMoE-style layers route individual frames within a single trained model, our approach selects among complete pretrained ASR systems for an entire audio clip. The routing decision is based on frame-level encoder outputs extracted from those systems.
 
-Routing and Mixture-of-Experts. Our work is inspired by sparse MoE
-and conditional computation. Early Mixture-of-Experts (Shazeer et
-al.\ 2017) enabled enormous capacity by routing tokens to only one
-expert subnetwork. This idea was scaled in GShard (2020) and Switch
-Transformer (2021), where models with hundreds of billions of
-parameters were trained with sparsely-gated MoE layers at constant
-cost. Beyond NLP, MoE has been applied in vision and other domains
-as well. All these models perform intra-network routing: each input
-token or frame is dispatched to an expert feedforward layer inside a
-single network. In contrast, our router performs inter-model
-routing: it selects among independently trained ASR systems at the
-clip level. This yields coarse-grained conditional computation that
-trades token-level granularity for whole-system specialization and
-single-pipeline decoding cost.
+More broadly, conditional computation and dynamic neural networks adapt inference to the input by selectively activating parts of the computation graph or terminating inference early \cite{han2022dynamic,scardapane2024conditional,laskaridis2021adaptive}. Representative mechanisms include dynamic skipping of recurrent updates or residual blocks \cite{campos2018skip,wu2018blockdrop,wang2018skipnet}, early-exit architectures with intermediate classifiers \cite{teerapittayanon2016branchynet,huang2018msdnet,xin2020deebert}, and adaptive-depth sequence models that vary computation across inputs or positions \cite{graves2016adaptive,dehghani2019universal,elbayad2020depth}. For long-sequence transformers, Routing Transformer learns content-based sparse attention patterns with sub-quadratic complexity \cite{roy-efficient}. Sparse expert layers such as BASE Layers similarly allocate tokens to experts within a single model \cite{lewis2021base}. By contrast, our setting routes among independently pretrained ASR systems with no shared parameters, so the router learns inter-model selection rather than intra-network conditional computation. 
 
-There is growing work on adaptive or multi-domain ASR. You et al.\
-(2021) proposed SpeechMoE, adding MoE layers to a CTC model with a
-learned embedding for the router. SpeechMoE achieved substantial CER
-reductions (7--23\% relative) over a static model by dynamically
-routing frames to experts. A follow-up SpeechMoE2 (2022) improved
-routing by feeding domain- and accent-embeddings to the router.
-Hu et al.\ (2023) introduced a Switch-Conformer MoE, a multilingual
-streaming Conformer with MoE FFN layers, reporting an $11.9\%$
-relative WER drop while activating only $53\%$ of parameters at
-inference. Our router differs from these in granularity and scope:
-whereas SpeechMoE-style layers route individual frames within one
-trained model, we choose among entire pretrained ASR systems for an
-entire clip, using the frame-level encoder outputs of those systems
-as input to the routing decision.
-
-Conditional Computation and Routing. More broadly, conditional
-computation in neural networks includes techniques such as dynamic
-skipping of layers (e.g.\ Skip-RNN, BlockDrop), early-exit
-classifiers, and adaptive depth. For sequence models, the Routing
-Transformer learns sparse attention patterns via content-based
-routing, reducing complexity from quadratic to sub-quadratic, and
-BASE Layers explore sparse capacity allocation for multi-task
-learning. These works route within a single network. In our setting,
-the experts are independently pretrained ASR systems with no shared
-parameters; the router learns only how to choose among them. This
-keeps the experts black-boxed and lets the router benefit from
-diverse pretraining without requiring joint optimization.
-
-% A large body of research has focused on improving the robustness of
-% automatic speech recognition systems under diverse acoustic conditions,
-% including noise, reverberation, channel variability, and speaker
-% heterogeneity. Approaches such as multi-condition training,
-% data augmentation strategies, and domain adaptation techniques aim to
-% expose models to a wide range of acoustic scenarios during training,
-% thereby improving generalization at inference time.
-% More recently, self-supervised learning methods and large-scale
-% pretrained speech encoders have significantly enhanced representation
-% quality, enabling models to perform well across previously unseen
-% conditions. These methods primarily pursue a single-model paradigm,
-% where robustness is achieved by increasing model capacity and training
-% data diversity. In contrast, our work considers a complementary
-% perspective: instead of improving a single model, we exploit a pool of
-% pretrained ASR systems and focus on selecting the most suitable model
-% for each input.
-
-% Another line of work aims to leverage multiple ASR systems through
-% ensemble and system combination techniques. Classical approaches such
-% as hypothesis alignment and voting schemes combine outputs from
-% multiple decoders to reduce transcription errors. Extensions to these
-% methods include confusion network construction, posterior-based
-% fusion, and minimum Bayes risk decoding, as well as more recent neural
-% fusion techniques that aggregate intermediate or final predictions
-% from multiple models. While such approaches often yield improvements
-% in transcription accuracy, they require executing multiple ASR models
-% for each input and performing additional alignment or fusion steps,
-% leading to increased computational cost and latency. In contrast,
-% model selection frameworks aim to retain the benefits of model
-% diversity while executing only a single expert at inference time,
-% making them more suitable for large-scale or real-time deployments.
 
 % Adaptive expert selection is also closely related to the broader
 % literature on mixture-of-experts (MoE) and conditional computation.
@@ -283,29 +174,18 @@ evaluation. Finally, \cref{sec:conclusion} concludes the paper.
 
 We study adaptive transcription at the level of individual audio clips. Let $\{x_n\}_{n=1}^{N}$ denote a collection of $N$ audio clips, where each clip $x_n$ is itself a temporal signal composed of a sequence of acoustic frames. A clip's frame-level structure captures variations in background noise, speaker identity, accent, speaking rate, and recording quality. State-of-the-art ASR algorithms respond differently to these intra-clip variations \cite{yu2016asrdeep,li2014overviewrobust}, and the best-performing algorithm for a given clip is generally not known in advance.
 
-Let $\mathcal{A} = \{A_1, A_2, \ldots, A_K\}$ denote a finite set of $K$ pretrained ASR algorithms, where $A_j \in \mathcal{A}$ represents the $j$-th algorithm. For each clip $x_n$, the transcription produced by the $j$-th algorithm is
-\[
-Y_{n,j} = A_j(x_n).
-\]
-Each transcription $Y_{n,j}$ is compared against the ground-truth reference $R_n$ using a transcription error measure. Using standard metrics such as the Word Error Rate (WER) \cite{li2014overviewrobust}, the transcription loss incurred by using algorithm $A_j$ on clip $x_n$ is
-\[
-\ell(Y_{n,j}, R_n),
-\]
-where $\ell(\cdot,\cdot)$ denotes the chosen error metric.
+Let $\mathcal{A} = \{A_1, A_2, \ldots, A_K\}$ denote a finite set of $K$ pretrained ASR algorithms, where $A_j \in \mathcal{A}$ represents the $j$-th algorithm. For each clip $x_n$, the transcription produced by the $j$-th algorithm is $Y_{n,j} = A_j(x_n)$. Each transcription $Y_{n,j}$ is compared against the ground-truth reference $R_n$ using a transcription error measure. Using standard metrics such as the Word Error Rate (WER) \cite{li2014overviewrobust}, the transcription loss incurred by using algorithm $A_j$ on clip $x_n$ is $\ell(Y_{n,j}, R_n)$, where $\ell(\cdot,\cdot)$ denotes the chosen error metric.
 
 Applying all $K$ algorithms to every incoming clip in order to pick the best transcription is computationally expensive. Instead, the goal is to select a single algorithm $j_n \in \{1,\dots,K\}$ for each clip such that the resulting transcription
-\[
-\hat{Y}_n = A_{j_n}(x_n)
-\]
-minimizes the cumulative transcription error across the dataset:
-\begin{equation}
+$\hat{Y}_n = A_{j_n}(x_n)$ minimizes the cumulative transcription error across the dataset:
+\begin{equation*}
 \sum_{n=1}^{N} \ell(Y_{n,j_n}, R_n).
-\end{equation}
+\end{equation*}
 
 A key challenge is that each clip is internally non-stationary: speaker, channel, and background can shift across frames within the same clip, and these intra-clip dynamics influence which algorithm transcribes the clip most accurately. Selection mechanisms that compress a clip into a single pooled feature vector discard this temporal structure and lose information that is relevant to the choice of expert. The framework introduced in the next section instead operates directly on frame-level encoder representations and uses a transformer-based router to model the temporal structure of each clip when picking an expert.
 
 
-\section{Proposed Model}
+\section{HIT-ASR: Hierarchical Transformer Routing for Adaptive ASR Expert Selection}
 
 \label{sec:workdone}
 
@@ -332,7 +212,7 @@ A key challenge is that each clip is internally non-stationary: speaker, channel
 
 \subsection{Algorithm Overview}
 
-The proposed framework performs adaptive ASR model selection at the
+HIT-ASR performs adaptive ASR model selection at the
 clip level by exploiting the frame-level temporal structure of each
 audio clip. The system operates in two phases: an offline training
 phase and an online inference phase, as illustrated in
