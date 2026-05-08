@@ -1,0 +1,15 @@
+# HuggingFace Hub artifact storage.
+#
+# Repo strategy: one HF dataset repo per evaluation dataset. The
+# ``{dataset_key}`` placeholder is filled at pipeline-build time from
+# ``storage.dataset_key`` (which the data config sets to e.g.
+# ``earnings22``).
+
+repo_id: huseyin-karaca/s2t-tr-{dataset_key}
+repo_type: dataset
+revision: null         # null = main; set to a tag/SHA to pin
+private: false
+push: true             # set to false for CI / dry runs
+pull: true             # set to false to force local extraction
+allow_dirty: false     # refuse to push a dirty working tree by default
+token: null            # null = use $HF_TOKEN env var

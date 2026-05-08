@@ -1,0 +1,83 @@
+# Earnings-22 — primary evaluation dataset.
+# - ~119h / ~125 calls of financial-call audio (English).
+# - Out-of-distribution for all three LibriSpeech-only base models.
+# - Per-row audio is the full call; we chunk to 10s fixed windows.
+#
+# Composition note: the three extractor configs are pulled in via the
+# Hydra ``defaults`` group under ``_extractors`` and then expanded into
+# a list below. Override one extractor at the CLI with e.g.
+#     data._extractors.wav2vec2_base.hf_revision=<sha>
+
+defaults:
+  - /extractor@_extractors.wav2vec2_base: wav2vec2_base
+  - /extractor@_extractors.data2vec_audio_base: data2vec_audio_base
+  - /extractor@_extractors.s2t_small: s2t_small
+  - _self_
+
+_extractors: {}    # populated by the @ overrides above
+
+_target_: src.data.extraction.datamodule.HFASRDataModule
+
+train_ratio: 0.8
+val_ratio: 0.1
+batch_size: 64
+num_workers: 4
+max_seq_len: 2000
+eager_load: false
+seed: 42
+
+pipeline:
+  _target_: src.data.extraction.datamodule.build_pipeline
+  device: cuda
+  dtype: float16
+
+  pipeline_cfg:
+    raw:
+      hf_id: revdotcom/earnings22
+      revision: null
+      split: train
+      config: null
+      id_field: source_id
+      text_field: sentence
+      audio_field: audio
+      select_n: null
+      streaming: false
+      trust_remote_code: false
+      filter_expr: ""
+
+    chunking:
+      method: fixed_window
+      seconds: 10.0
+      overlap: 0.0
+      drop_last_below: 0.5
+      min_seconds: 1.0
+      max_seconds: 30.0
+
+    storage:
+      data_root: data
+      dataset_key: earnings22
+      hub:
+        repo_id: huseyin-karaca/s2t-tr-{dataset_key}
+        repo_type: dataset
+        revision: null
+        private: false
+        push: true
+        pull: true
+        allow_dirty: false
+        token: null
+
+    write:
+      batch_size: 8
+      row_group_size: 256
+      deterministic: true
+
+    manifest_policy:
+      mode: strict
+      ignore_fields: [created_at, created_by, git, versions]
+
+    config_hash: null   # filled at runtime by build_pipeline()
+
+  extractors:
+    - ${_extractors.wav2vec2_base}
+    - ${_extractors.data2vec_audio_base}
+    - ${_extractors.s2t_small}

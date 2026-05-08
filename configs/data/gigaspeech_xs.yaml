@@ -1,0 +1,76 @@
+# GigaSpeech XS subset — smoke / CI dataset (~10h, ~few thousand clips).
+# Use for end-to-end pipeline tests, not paper results.
+
+defaults:
+  - /extractor@_extractors.wav2vec2_base: wav2vec2_base
+  - /extractor@_extractors.data2vec_audio_base: data2vec_audio_base
+  - /extractor@_extractors.s2t_small: s2t_small
+  - _self_
+
+_extractors: {}
+
+_target_: src.data.extraction.datamodule.HFASRDataModule
+
+train_ratio: 0.8
+val_ratio: 0.1
+batch_size: 32
+num_workers: 2
+max_seq_len: 2000
+eager_load: false
+seed: 42
+
+pipeline:
+  _target_: src.data.extraction.datamodule.build_pipeline
+  device: cuda
+  dtype: float16
+
+  pipeline_cfg:
+    raw:
+      hf_id: speechcolab/gigaspeech
+      revision: null
+      split: train
+      config: xs
+      id_field: segment_id
+      text_field: text
+      audio_field: audio
+      select_n: null
+      streaming: false
+      trust_remote_code: true
+      filter_expr: ""
+
+    chunking:
+      method: none
+      seconds: 10.0
+      overlap: 0.0
+      drop_last_below: 0.5
+      min_seconds: 0.5
+      max_seconds: 30.0
+
+    storage:
+      data_root: data
+      dataset_key: gigaspeech_xs
+      hub:
+        repo_id: huseyin-karaca/s2t-tr-{dataset_key}
+        repo_type: dataset
+        revision: null
+        private: false
+        push: false       # smoke run: don't pollute Hub
+        pull: false       # always extract locally for smoke
+        allow_dirty: false
+        token: null
+
+    write:
+      batch_size: 8
+      row_group_size: 128
+      deterministic: true
+
+    manifest_policy:
+      mode: warn
+      ignore_fields: [created_at, created_by, git, versions]
+
+    config_hash: null
+
+  extractors:
+    - ${_extractors.wav2vec2_base}
+    - ${_extractors.data2vec_audio_base}
+    - ${_extractors.s2t_small}

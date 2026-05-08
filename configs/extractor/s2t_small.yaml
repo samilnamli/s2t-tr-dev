@@ -1,0 +1,9 @@
+# Frozen Speech2Text-small (Fairseq) encoder-decoder.
+# - Trained ONLY on LibriSpeech (~71M params).
+# - Encoder-decoder seq2seq ⇒ different inductive bias from the two CTC
+#   experts; the architectural diversity is what makes the ensemble useful.
+
+name: s2t_small
+hf_model_id: facebook/s2t-small-librispeech-asr
+hf_revision: null
+target_sample_rate: 16000

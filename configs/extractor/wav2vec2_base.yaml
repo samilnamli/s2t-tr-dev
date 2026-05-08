@@ -1,0 +1,10 @@
+# Frozen wav2vec2-base ASR encoder + CTC head.
+# - Trained ONLY on LibriSpeech 960h (no overlap with target eval datasets).
+# - 95M params; CTC encoder-only.
+
+name: wav2vec2_base
+hf_model_id: facebook/wav2vec2-base-960h
+# Pin a known-good revision for reproducibility. ``null`` = HEAD of ``main``
+# (logged as a warning).
+hf_revision: null
+target_sample_rate: 16000

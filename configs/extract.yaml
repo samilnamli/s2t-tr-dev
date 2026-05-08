@@ -1,0 +1,38 @@
+# Root config for ``python -m src.data.extraction``.
+#
+# Pulls in a ``configs/data/<dataset>.yaml`` and re-uses its DataModule
+# config to drive the pipeline (the DataModule already wires the
+# pipeline + extractors together).
+#
+# Usage:
+#   python -m src.data.extraction data=earnings22 stage=processed
+#   python -m src.data.extraction data=common_voice_17_en stage=interim \
+#       data.pipeline.pipeline_cfg.storage.hub.push=false
+#
+# ``stage`` controls which target the pipeline drives to:
+#   raw       — iterate the HF dataset (smoke check on revision pinning)
+#   interim   — build per-extractor parquets
+#   processed — build the combined parquet (default)
+
+defaults:
+  - data: earnings22
+  - logging: default
+  - _self_
+
+stage: processed
+device: cuda
+dtype: float16
+
+# Convenience aliases so ``cli.py`` can read these without repeating
+# ``data.pipeline.*`` paths everywhere.
+pipeline: ${data.pipeline.pipeline_cfg}
+extractors: ${data._extractors}
+
+hydra:
+  run:
+    dir: /tmp/hydra-extract/${now:%Y-%m-%d_%H-%M-%S}
+  output_subdir: null
+  job_logging:
+    root:
+      handlers: []
+    disable_existing_loggers: false

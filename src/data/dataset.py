@@ -1,16 +1,37 @@
 """Dataset for the combined ASR features parquet.
 
-Expects a single parquet produced by :mod:`src.data.preprocess`, containing:
+Schema (dynamic K base models, K ≥ 1):
     - ground_truth: str
-    - {whisper, hubert, w2v2}_features: list[list[float]]  (variable-length [T, D])
-    - {whisper, hubert, w2v2}_wer: float
+    - <name>_features: list[list[float]]  for each model in the spec
+    - <name>_wer: float                   for each model in the spec
+    - <name>_transcription: str (optional) for each model in the spec
+
+The model spec is read from the parquet's Arrow schema metadata under
+the ``asr_models`` key (UTF-8 JSON list of objects). If the metadata is
+absent, the dataset falls back to the legacy 3-slot schema —
+``["hubert", "whisper", "wav2vec2"]`` with column names
+``hubert_features``, ``whisper_features``, ``w2v2_features`` (etc.) —
+so existing AMI / VoxPopuli / synthetic parquets keep working unchanged.
+
+Embedded metadata format (JSON list, one entry per expert):
+
+    [
+      {
+        "name": "wav2vec2_base",
+        "feature_col": "wav2vec2_base_features",
+        "wer_col": "wav2vec2_base_wer",
+        "transcription_col": "wav2vec2_base_transcription",
+        "embedding_dim": 768
+      },
+      ...
+    ]
 
 Memory model:
     Two access strategies are supported, controlled by ``eager_load``.
 
     Eager mode (``eager_load=True``) — recommended on high-RAM hosts.
         At construction time the parquet is streamed into one flat
-        ``(sum_T_k, D_k)`` ``np.float32`` buffer per expert plus a
+        ``(sum_T_k, D_k)`` ``np.float16`` buffer per expert plus a
         ``(N+1,)`` int64 offsets array, mirroring the variable-length
         layout used by Hugging Face / Arrow but kept on the heap as
         a single contiguous numpy allocation. ``__getitem__`` then
@@ -21,8 +42,6 @@ Memory model:
         pages are never refcounted (the numpy refcount lives in a
         tiny wrapper struct, not on the data pages), so workers
         read from the same physical pages without duplication.
-        Estimated RAM = sum over experts of (N * mean_T * D * 4 B),
-        e.g. ~38 GB for AMI with HuBERT-Large + Whisper-Base + W2V2.
 
     Lazy mode (``eager_load=False``) — the safe fallback for
         low-RAM environments such as Colab free tier. Opens the
@@ -41,11 +60,11 @@ Memory model:
     parquet through :func:`src.data.parquet_cache.ensure_lazy_parquet`
     in ``__init__``: if the source has too-large row groups, a
     rechunked copy with small row groups is materialized to a local
-    cache once, and all subsequent reads use that cached file. (This
-    also bounds peak RAM during the eager-mode streaming decode.)
+    cache once, and all subsequent reads use that cached file.
 """
 
-from functools import lru_cache
+from functools import lru_cache, partial
+import json
 import logging
 from typing import Dict, List, Optional
 
@@ -59,6 +78,12 @@ from torch.utils.data import Dataset
 from src.data.parquet_cache import DEFAULT_TARGET_ROW_GROUP_SIZE, ensure_lazy_parquet
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Legacy 3-slot schema. Used as the fallback when a parquet lacks the
+# ``asr_models`` metadata key — i.e. all parquets produced before the
+# extraction pipeline existed (AMI, VoxPopuli, synthetic, local_test).
+# ---------------------------------------------------------------------------
 
 MODEL_NAMES: List[str] = ["hubert", "whisper", "wav2vec2"]
 
@@ -78,7 +103,61 @@ TRANSCRIPTION_COLUMNS: Dict[str, str] = {
     "wav2vec2": "w2v2_transcription",
 }
 
+ASR_MODELS_METADATA_KEY = b"asr_models"
 DEFAULT_ROW_GROUP_CACHE_SIZE = 4
+
+
+def _legacy_model_spec() -> List[dict]:
+    return [
+        {
+            "name": name,
+            "feature_col": FEATURE_COLUMNS[name],
+            "wer_col": WER_COLUMNS[name],
+            "transcription_col": TRANSCRIPTION_COLUMNS[name],
+            "embedding_dim": None,  # discovered at load time
+        }
+        for name in MODEL_NAMES
+    ]
+
+
+def _resolve_model_spec(parquet_path: str) -> List[dict]:
+    """Resolve the per-clip model spec for a parquet.
+
+    Reads ``asr_models`` from the parquet's Arrow schema metadata and
+    falls back to the legacy 3-slot schema when the key is missing.
+    """
+    schema = pq.read_schema(parquet_path)
+    raw = (schema.metadata or {}).get(ASR_MODELS_METADATA_KEY)
+    if raw is None:
+        logger.info(
+            "Parquet %s has no 'asr_models' metadata — falling back to legacy "
+            "3-slot schema (hubert/whisper/wav2vec2).",
+            parquet_path,
+        )
+        return _legacy_model_spec()
+
+    try:
+        spec = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"Failed to parse 'asr_models' metadata in {parquet_path}: {exc}"
+        ) from exc
+
+    if not isinstance(spec, list) or not spec:
+        raise ValueError(
+            f"'asr_models' metadata in {parquet_path} must be a non-empty list."
+        )
+
+    required = {"name", "feature_col", "wer_col"}
+    for entry in spec:
+        missing = required - entry.keys()
+        if missing:
+            raise ValueError(
+                f"Model spec entry {entry!r} in {parquet_path} is missing keys: {missing}"
+            )
+        entry.setdefault("transcription_col", f"{entry['name']}_transcription")
+        entry.setdefault("embedding_dim", None)
+    return spec
 
 
 def _resolve_cache_size(num_row_groups: int, requested: Optional[int]) -> int:
@@ -97,6 +176,10 @@ def _resolve_cache_size(num_row_groups: int, requested: Optional[int]) -> int:
 
 class ASRFeatureDataset(Dataset):
     """Variable-length frame-level embeddings + per-model WER.
+
+    The set of base models is read from the parquet metadata at
+    construction time; it falls back to the legacy 3-slot schema for
+    parquets that predate the extraction pipeline.
 
     See the module docstring for the eager / lazy memory model.
     """
@@ -120,21 +203,13 @@ class ASRFeatureDataset(Dataset):
             access without blowing up RAM.
         auto_rechunk: If True (default), stream-rewrite the input
             parquet with small row groups to a local cache when
-            the source has too-large row groups. Fixes OOM kills
-            in lazy mode and bounds peak RAM during eager-mode
-            streaming decode.
+            the source has too-large row groups.
         target_row_group_size: Rows per row group when rechunking.
-        cache_dir: Where to write the rechunked file. Defaults to
-            a local-disk cache (see :func:`ensure_lazy_parquet`).
+        cache_dir: Where to write the rechunked file.
         eager_load: If True, decode the entire feature parquet
-            into per-expert flat ``np.float32`` buffers + offsets
+            into per-expert flat ``np.float16`` buffers + offsets
             and serve all subsequent ``__getitem__`` calls from
-            RAM. Recommended on high-RAM hosts (e.g. cloud GPU
-            instances with 100+ GB system RAM). Eliminates per-
-            batch parquet decode, so training becomes GPU-bound.
-            Buffers are shared between DataLoader workers via
-            fork+COW. Estimated RAM ≈ sum_k(N * mean_T * D_k * 4 B);
-            a memory estimate is logged after loading.
+            RAM. Recommended on high-RAM hosts.
         """
         self.source_parquet_path = str(parquet_path)
         self.eager_load = bool(eager_load)
@@ -151,6 +226,17 @@ class ASRFeatureDataset(Dataset):
 
         self.max_seq_len = max_seq_len
 
+        # Resolve the K-model spec from parquet metadata (or legacy fallback).
+        self._model_spec: List[dict] = _resolve_model_spec(self.parquet_path)
+        self.model_names: List[str] = [m["name"] for m in self._model_spec]
+        self._feature_cols: Dict[str, str] = {
+            m["name"]: m["feature_col"] for m in self._model_spec
+        }
+        self._wer_cols: Dict[str, str] = {m["name"]: m["wer_col"] for m in self._model_spec}
+        self._transcription_cols: Dict[str, str] = {
+            m["name"]: m["transcription_col"] for m in self._model_spec
+        }
+
         self._pq_file: Optional[pq.ParquetFile] = None
         meta = pq.read_metadata(self.parquet_path)
         self.num_rows: int = meta.num_rows
@@ -164,7 +250,7 @@ class ASRFeatureDataset(Dataset):
 
         self._cache_size = _resolve_cache_size(self.num_row_groups, cache_size)
 
-        wer_cols = [WER_COLUMNS[n] for n in MODEL_NAMES]
+        wer_cols = [self._wer_cols[n] for n in self.model_names]
         wer_table = pq.read_table(self.parquet_path, columns=wer_cols)
         self.wer_matrix = np.stack(
             [wer_table[c].to_numpy().astype(np.float32) for c in wer_cols],
@@ -178,31 +264,33 @@ class ASRFeatureDataset(Dataset):
         self.ground_truth: Optional[List[str]] = None
         self.transcriptions: Optional[Dict[str, List[str]]] = None
         if self._has_text:
-            text_cols = ["ground_truth"] + [
-                TRANSCRIPTION_COLUMNS[n]
-                for n in MODEL_NAMES
-                if TRANSCRIPTION_COLUMNS[n] in schema_names
+            available_transcription_cols = [
+                self._transcription_cols[n]
+                for n in self.model_names
+                if self._transcription_cols[n] in schema_names
             ]
+            text_cols = ["ground_truth"] + available_transcription_cols
             text_table = pq.read_table(self.parquet_path, columns=text_cols)
             self.ground_truth = text_table["ground_truth"].to_pylist()
             self.transcriptions = {
-                name: text_table[TRANSCRIPTION_COLUMNS[name]].to_pylist()
-                for name in MODEL_NAMES
-                if TRANSCRIPTION_COLUMNS[name] in schema_names
+                name: text_table[self._transcription_cols[name]].to_pylist()
+                for name in self.model_names
+                if self._transcription_cols[name] in schema_names
             }
 
         if self.eager_load:
             logger.info("Eager loading full parquet into flat float16 numpy buffers...")
             table = pq.read_table(
-                self.parquet_path, columns=[FEATURE_COLUMNS[n] for n in MODEL_NAMES]
+                self.parquet_path,
+                columns=[self._feature_cols[n] for n in self.model_names],
             )
 
             self._flat_buffers: Dict[str, np.ndarray] = {}
             self._frame_offsets: Dict[str, np.ndarray] = {}
             self._model_dims: Dict[str, int] = {}
 
-            for name in MODEL_NAMES:
-                col_name = FEATURE_COLUMNS[name]
+            for name in self.model_names:
+                col_name = self._feature_cols[name]
 
                 # To prevent PyArrow from crashing with "offset overflow" (2.1B limit)
                 # on huge 23GB files, we process the chunks manually instead of
@@ -222,14 +310,12 @@ class ASRFeatureDataset(Dataset):
                     if D is None:
                         D = inner_offsets[1] - inner_offsets[0]
 
-                    # Extract floats for this chunk and downcast to float16
                     chunk_floats = inner_arr.values.to_numpy(zero_copy_only=False)
                     if chunk_floats.dtype != np.float16:
                         chunk_floats = chunk_floats.astype(np.float16)
 
                     all_floats.append(chunk_floats)
 
-                    # Update offsets (skip the first 0 of each chunk, add running offset)
                     shifted_offsets = outer_offsets[1:] + current_offset
                     all_offsets.extend(shifted_offsets.tolist())
 
@@ -259,12 +345,13 @@ class ASRFeatureDataset(Dataset):
         )
         mode = "EAGER (RAM-resident)" if self.eager_load else "LAZY (parquet)"
         logger.info(
-            "Opened parquet %s (rows=%d, row_groups=%d, max_rg_rows=%d) — "
+            "Opened parquet %s (rows=%d, row_groups=%d, max_rg_rows=%d, K=%d) — "
             "mode=%s, row-group cache size=%d.",
             self.parquet_path,
             self.num_rows,
             self.num_row_groups,
             max_rg,
+            len(self.model_names),
             mode,
             self._cache_size,
         )
@@ -282,20 +369,10 @@ class ASRFeatureDataset(Dataset):
         return self._pq_file
 
     def _read_row_group_uncached(self, rg_idx: int) -> Dict[str, "pa.ChunkedArray"]:
-        """Read the three feature columns of a single row group as Arrow arrays.
-
-        We deliberately avoid ``.to_pylist()`` here — that would decode
-        every clip in the row group into Python list objects up-front,
-        which inflates memory by ~7-9× compared to the parquet on-disk
-        size (Python float overhead). Instead we keep the Arrow buffers
-        and decode one clip at a time inside :meth:`__getitem__` via
-        ``Scalar.as_py()``. Combined with a small ``row_group_size``
-        in the cached parquet, this caps peak RAM to roughly one row
-        group's Arrow footprint per cache slot.
-        """
-        cols = [FEATURE_COLUMNS[n] for n in MODEL_NAMES]
+        """Read each model's feature column for one row group as Arrow arrays."""
+        cols = [self._feature_cols[n] for n in self.model_names]
         table = self.pq_file.read_row_group(rg_idx, columns=cols)
-        return {n: table[FEATURE_COLUMNS[n]] for n in MODEL_NAMES}
+        return {n: table[self._feature_cols[n]] for n in self.model_names}
 
     def _locate(self, idx: int) -> tuple[int, int]:
         """Find ``(row_group_index, row_in_group)`` for global ``idx``."""
@@ -331,16 +408,14 @@ class ASRFeatureDataset(Dataset):
         seq_lens: Dict[str, int] = {}
 
         if self.eager_load:
-            for name in MODEL_NAMES:
+            for name in self.model_names:
                 start_frame = self._frame_offsets[name][idx]
                 end_frame = self._frame_offsets[name][idx + 1]
                 D = self._model_dims[name]
 
                 # Slice the float16 buffer with no copy. The dtype upcast
                 # to float32 is deferred to ``ASRDataModule.on_after_batch_transfer``
-                # so it happens once per batch on the GPU instead of once
-                # per clip on the CPU — the latter is a >2x throughput
-                # difference on Blackwell-class GPUs at AMI-scale.
+                # so it happens once per batch on the GPU.
                 emb = self._flat_buffers[name][start_frame * D : end_frame * D].reshape(-1, D)
 
                 if emb.shape[0] > self.max_seq_len:
@@ -352,10 +427,7 @@ class ASRFeatureDataset(Dataset):
             rg_idx, row = self._locate(idx)
             rg = self._read_row_group(rg_idx)
 
-            for name in MODEL_NAMES:
-                # rg[name] is an Arrow ChunkedArray; indexing returns a
-                # ListScalar, and as_py() decodes only that single clip's
-                # nested list — not the whole row group.
+            for name in self.model_names:
                 emb = np.asarray(rg[name][row].as_py(), dtype=np.float32)
                 if emb.ndim != 2:
                     raise ValueError(
@@ -382,17 +454,19 @@ class ASRFeatureDataset(Dataset):
         return sample
 
 
-def collate_fn(batch: List[dict]) -> dict:
+def _collate_with_models(model_names: List[str], batch: List[dict]) -> dict:
     """Pad each model's frame sequence independently and build attention masks.
 
     Args:
+        model_names: Ordered list of base-model names — must match the
+            keys used in each batch element's ``hidden_states`` dict.
         batch: List of dicts from :meth:`ASRFeatureDataset.__getitem__`.
 
     Returns:
         Dict with:
             hidden_states:   Dict[model_name, (B, T_max_k, D_k)]
-            attention_masks: Dict[model_name, (B, T_max_k) bool], True where valid
-            wer_matrix:      (B, K) float — per-sample per-model WER
+            attention_masks: Dict[model_name, (B, T_max_k) bool]
+            wer_matrix:      (B, K) float
             targets:         (B,) long  — argmin(wer_matrix, dim=-1)
             ground_truth:    list[str] | None
             transcription:   Dict[model_name, list[str]] | None
@@ -402,7 +476,7 @@ def collate_fn(batch: List[dict]) -> dict:
     padded_hidden_states: Dict[str, torch.Tensor] = {}
     attention_masks: Dict[str, torch.Tensor] = {}
 
-    for name in MODEL_NAMES:
+    for name in model_names:
         sequences = [b["hidden_states"][name] for b in batch]
         lengths = torch.tensor([b["seq_lens"][name] for b in batch])
 
@@ -434,3 +508,17 @@ def collate_fn(batch: List[dict]) -> dict:
         "transcription": transcription,
         "sample_ids": sample_ids,
     }
+
+
+def make_collate_fn(model_names: List[str]):
+    """Build a picklable collate_fn closure over the given model names.
+
+    Used by :class:`ASRDataModule` so the DataLoader workers know which
+    keys to pad — works for any K, not just the legacy three.
+    """
+    return partial(_collate_with_models, model_names)
+
+
+def collate_fn(batch: List[dict]) -> dict:
+    """Legacy collate (3-slot schema). Kept for callers that import it directly."""
+    return _collate_with_models(MODEL_NAMES, batch)

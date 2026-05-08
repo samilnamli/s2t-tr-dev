@@ -1,0 +1,10 @@
+# Frozen data2vec-audio-base ASR encoder + CTC head.
+# - Trained ONLY on LibriSpeech 960h.
+# - 93M params; CTC encoder-only.
+# - Different SSL pretraining objective (continuous targets) vs. wav2vec2 ⇒
+#   genuine ensemble disagreement, not just two views of the same model.
+
+name: data2vec_audio_base
+hf_model_id: facebook/data2vec-audio-base-960h
+hf_revision: null
+target_sample_rate: 16000

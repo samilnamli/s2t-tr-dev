@@ -1,0 +1,17 @@
+# Shared pipeline knobs. The dataset-specific raw + chunking + storage
+# configs are composed in via data/<dataset>.yaml.
+
+write:
+  batch_size: 8
+  row_group_size: 256
+  deterministic: true
+
+manifest_policy:
+  mode: strict       # strict | warn | off
+  ignore_fields:     # match-comparison ignores (defaults preserve provenance)
+    - created_at
+    - created_by
+    - git
+    - versions
+
+config_hash: null    # filled in at runtime by build_pipeline()

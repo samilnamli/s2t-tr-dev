@@ -16,7 +16,7 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader, Subset
 
-from src.data.dataset import MODEL_NAMES, ASRFeatureDataset, collate_fn
+from src.data.dataset import ASRFeatureDataset, make_collate_fn
 
 
 class ASRDataModule(pl.LightningDataModule):
@@ -125,7 +125,7 @@ class ASRDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=shuffle,
             num_workers=self.num_workers,
-            collate_fn=collate_fn,
+            collate_fn=make_collate_fn(self._dataset.model_names),
             pin_memory=True,
             persistent_workers=self.num_workers > 0,
         )
@@ -144,9 +144,9 @@ class ASRDataModule(pl.LightningDataModule):
         self._ensure_setup()
         ds = self._dataset
         if ds.eager_load:
-            return {name: ds._model_dims[name] for name in MODEL_NAMES}
+            return {name: ds._model_dims[name] for name in ds.model_names}
         sample = ds[0]
-        return {name: sample["hidden_states"][name].shape[-1] for name in MODEL_NAMES}
+        return {name: sample["hidden_states"][name].shape[-1] for name in ds.model_names}
 
     @property
     def wer_train_matrix(self) -> np.ndarray:
@@ -158,7 +158,7 @@ class ASRDataModule(pl.LightningDataModule):
         self._ensure_setup()
         wer = self.wer_train_matrix
         best = wer.argmin(axis=-1)
-        k = len(MODEL_NAMES)
+        k = len(self._dataset.model_names)
         counts = np.bincount(best, minlength=k).astype(float)
         total = counts.sum()
         return (counts / total).tolist() if total > 0 else [1.0 / k] * k

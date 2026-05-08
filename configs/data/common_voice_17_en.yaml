@@ -1,0 +1,79 @@
+# Common Voice 17 (English) — fallback when Earnings-22 proves data-starved.
+# - Pre-segmented (~5 s clips), no chunking needed.
+# - Validated split has multiple per-clip validations: high quality.
+# - Set ``select_n`` to a fixed integer (e.g. 50000) for reproducible
+#   subsetting; leave ``null`` to use the full split.
+
+defaults:
+  - /extractor@_extractors.wav2vec2_base: wav2vec2_base
+  - /extractor@_extractors.data2vec_audio_base: data2vec_audio_base
+  - /extractor@_extractors.s2t_small: s2t_small
+  - _self_
+
+_extractors: {}
+
+_target_: src.data.extraction.datamodule.HFASRDataModule
+
+train_ratio: 0.8
+val_ratio: 0.1
+batch_size: 64
+num_workers: 4
+max_seq_len: 2000
+eager_load: false
+seed: 42
+
+pipeline:
+  _target_: src.data.extraction.datamodule.build_pipeline
+  device: cuda
+  dtype: float16
+
+  pipeline_cfg:
+    raw:
+      hf_id: mozilla-foundation/common_voice_17_0
+      revision: null
+      split: validated
+      config: en
+      id_field: client_id
+      text_field: sentence
+      audio_field: audio
+      select_n: 50000
+      streaming: false
+      trust_remote_code: true   # Common Voice ships a custom loading script
+      filter_expr: ""
+
+    chunking:
+      method: none
+      seconds: 10.0
+      overlap: 0.0
+      drop_last_below: 0.5
+      min_seconds: 0.5
+      max_seconds: 30.0
+
+    storage:
+      data_root: data
+      dataset_key: common_voice_17_en
+      hub:
+        repo_id: huseyin-karaca/s2t-tr-{dataset_key}
+        repo_type: dataset
+        revision: null
+        private: false
+        push: true
+        pull: true
+        allow_dirty: false
+        token: null
+
+    write:
+      batch_size: 16
+      row_group_size: 256
+      deterministic: true
+
+    manifest_policy:
+      mode: strict
+      ignore_fields: [created_at, created_by, git, versions]
+
+    config_hash: null
+
+  extractors:
+    - ${_extractors.wav2vec2_base}
+    - ${_extractors.data2vec_audio_base}
+    - ${_extractors.s2t_small}
