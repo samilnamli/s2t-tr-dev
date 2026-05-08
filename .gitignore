@@ -222,3 +222,10 @@ wandb/
 *.log
 *.out
 reports/manuscript/latex_output/
+notebooks/generate_table.py
+notebooks/analyze_results.ipynb
+runs-voxpopuli.csv
+ablation_arch_test_wer_comparison.json
+ablation_loss_test_wer_comparison.json
+runs.csv
+synth_main_test_wer_comparison.json

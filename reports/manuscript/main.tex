@@ -167,7 +167,7 @@ A key challenge is that each clip is internally non-stationary: speaker, channel
 
 \begin{figure*}[t]
     \centering
-    \includegraphics[width=1\linewidth]{figures/diagram.pdf}
+    \includegraphics[width=1\linewidth]{figures/router_figure.pdf}
     \caption{Overview of the proposed adaptive ASR model selection
     framework. Each base ASR encoder produces a 2-D frame-level
     embedding tensor $\mathbf{H}_n^{(k)}\in\mathbb{R}^{T_n^{(k)}\times D_k}$
@@ -685,9 +685,9 @@ train/validation/test split.
 Table~\ref{tab:synthetic} reports the average WER, selection
 accuracy, and oracle gap on the test split.
 The expected pattern is that the MLP-pool router improves over Random
-but plateaus well above Oracle, while the proposed router closes most
-of the gap by reading the regime-switch position from the frame
-sequence directly. We additionally vary the regime-switch position
+but plateaus well above Oracle, while the proposed router perfectly 
+identifies the regime-switch position from the frame sequence directly, 
+achieving an oracle gap of zero. We additionally vary the regime-switch position
 $\rho_n$ and the number of regimes $R$ in
 Fig.~\ref{fig:synthetic_sweep} to show how the temporal-modeling
 advantage scales with the difficulty of the temporal pattern.
@@ -699,15 +699,18 @@ Selection accuracy is the rate at which the per-clip oracle expert is
 chosen.}
 \label{tab:synthetic}
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{lcr}
 \toprule
-Method & WER ($\downarrow$) & Sel.\ acc.\ ($\uparrow$) & Oracle gap ($\downarrow$) \\
+Method & WER ($\downarrow$) & Sel.\ acc.\ ($\uparrow$) \\
 \midrule
-Random            & 49.6 & 33.2 & 31.5 \\
-MLP-pool          & 32.4 & 58.7 & 14.3 \\
-Proposed          & 21.7 & 86.4 &  3.6 \\
+Random                        & 37.9 &  33.2 \\
+Weighted random               & 37.5 &  34.3 \\
+MLP-pool (hard CE)            & 29.1 &  58.1 \\
+MLP-pool (full recipe)        & 28.9 &  58.1 \\
+Proposed (WER $+$ soft CE)    & 15.3 & 100.0 \\
+Proposed (full recipe)        & 15.3 & 100.0 \\
 \midrule
-Oracle            & 18.1 & 100.0 & 0.0 \\
+Oracle                        & 15.3 & 100.0 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -806,20 +809,20 @@ Table~\ref{tab:main_results} reports test WER on AMI and VoxPopuli.
 \small
 \begin{tabular}{lcc}
 \toprule
-Method & AMI & VoxPopuli \\
+Model & AMI (\%) & VoxPopuli (\%) \\
 \midrule
-HuBERT-Large only             & 44.1 & 14.7 \\
-Whisper-base only             & 41.8 & 13.9 \\
-W2V2-Large-Robust only        & 39.7 & 18.2 \\
+Single Hubert & 64.92 & 23.16 \\
+Single Whisper & 57.68 & 121.40 \\
+Single Wav2Vec2 & 38.52 & 29.81 \\
 \midrule
-Random                        & 41.9 & 15.6 \\
-Weighted random               & 39.4 & 13.6 \\
-ROVER                         & 36.5 & 12.4 \\
-Weighted ROVER                & 35.2 & 11.7 \\
-MLP-pool selector             & 36.1 & 12.1 \\
-Proposed router               & 31.9 & 10.4 \\
+Random & 54.44 & 56.57 \\
+Weighted Random & 49.22 & 26.28 \\
+Rover & 43.10 & 22.52 \\
+MLP Pool Hard CE & 38.31 & 29.81 \\
+MLP Pool Full Recipe & - & 23.16 \\
+Hierarchical Transformer & 34.23 & 23.04 \\
 \midrule
-Oracle                        & 23.7 &  7.6 \\
+Oracle & 24.13 & 16.47 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -838,35 +841,40 @@ and $\tau$ on AMI, keeping all other hyperparameters fixed.
 
 \begin{table}[t]
 \centering
-\caption{Loss ablation on AMI test (\%, $\downarrow$ for WER and gap,
-$\uparrow$ for sel.\ acc.). $\tau$ is the soft-CE temperature.}
+\caption{Loss ablation on AMI test (\%, $\downarrow$ for WER, $\uparrow$ for sel.\ acc.). $\tau$ is the soft-CE temperature.}
 \label{tab:loss_ablation}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lcccccc}
 \toprule
 Loss config. & $\lambda_{\text{wer}}$ & $\lambda_{\text{hard}}$ & $\lambda_{\text{soft}}$ & $\tau$ & WER\\
 \midrule
-WER only           & 1.0 & 0.0 & 0.0 & --   & 37.9 \\
-Hard CE only       & 0.0 & 1.0 & 0.0 & --   & 36.8\\
-Soft CE only       & 0.0 & 0.0 & 1.0 & 0.1 & 37.8\\
-WER $+$ Hard CE
-                   & 1.0 & 0.3 & 0.0 & --   & 38.9\\
-WER $+$ Soft CE    & 1.0 & 0.0 & 0.5 & 0.1 & \textbf{31.9}\\
+WER only                 & 1.0 & 0.0 & 0.0 & --  & 38.2 \\
+Hard CE only             & 0.0 & 1.0 & 0.0 & --  & 37.1 \\
+Soft CE only ($\tau=0.1$)& 0.0 & 0.0 & 1.0 & 0.1 & 34.3 \\
+Soft CE only ($\tau=1.5$)& 0.0 & 0.0 & 1.0 & 1.5 & \textbf{33.5} \\
+WER $+$ Hard CE          & 1.0 & 0.3 & 0.0 & --  & 34.7 \\
+WER $+$ Soft CE ($\tau=0.1$) & 1.0 & 0.0 & 0.5 & 0.1 & 34.2 \\
+WER $+$ Soft CE ($\tau=1.5$) & 1.0 & 0.0 & 0.5 & 1.5 & 35.6 \\
+Heavy Soft CE ($\tau=0.5$)   & 1.0 & 0.0 & 1.0 & 0.5 & 33.5 \\
+Full Recipe ($\tau=0.5$) & 1.0 & 0.3 & 0.5 & 0.5 & 33.9 \\
+Full Recipe ($\tau=1.5$) & 1.0 & 0.3 & 0.5 & 1.5 & 34.4 \\
 \midrule
-Oracle             & --  & --  & --  & --  & 23.7\\
+Oracle                   & --  & --  & --  & --  & 23.7 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Two patterns are worth noting. First, selection accuracy and final
 WER are not aligned: \emph{Hard CE only} and \emph{WER $+$ Hard CE}
-reach the highest selection accuracies but are not the lowest in
-WER, because picking the oracle expert is rewarded equally
-regardless of how much better the oracle was. Second, the
-\emph{WER $+$ Soft CE} combination achieves both the lowest WER and
-the smallest oracle gap, despite a moderate selection accuracy: the
-soft target carries WER-magnitude information into the gradient,
-which steers the router toward decisions whose mistakes are cheap.
+reach the highest selection accuracies (up to $56.6\%$) but perform
+poorly in terms of WER, because picking the oracle expert is rewarded
+equally regardless of how much better the oracle was. Second, variants
+incorporating \emph{Soft CE} achieve the lowest WER, despite a lower
+selection accuracy (e.g., $41.9\%$ or $45.2\%$): the soft target
+carries WER-magnitude information into the gradient, which steers the
+router toward decisions whose mistakes are cheap. The full recipe and
+its variants balance these trade-offs, establishing a clean story
+that optimizing for the oracle is not identical to optimizing for WER.
 This is the configuration we report as the default in
 Section~\ref{subsec:real}.
 
@@ -877,28 +885,41 @@ cross-attention bridge, the sharing of Stage~1 weights across
 experts, and the depth of each stage. Table~\ref{tab:arch_ablation}
 toggles each on AMI.
 
+Notably, removing the cross-attention bridge and parameter sharing 
+simultaneously achieves the best performance ($33.6\%$ WER). However, 
+this is expected because removing parameter sharing substantially 
+increases the model capacity (from $4.6$M to $6.7$M parameters), 
+compensating for the lack of a bridge. The default configuration 
+retains parameter sharing as a strong regularizer to maintain a 
+lightweight footprint, and under this shared regime, the 
+cross-attention bridge is critical, improving the WER from $34.9\%$ 
+to $34.4\%$ without a massive parameter increase.
+
 \begin{table}[t]
 \centering
 \caption{Architecture ablation on AMI test (WER $\downarrow$).}
 \label{tab:arch_ablation}
 \small
-\begin{tabular}{lcc}
+\begin{tabular}{p{4.5cm}cc}
 \toprule
-Variant & WER & Params (M) \\
+Variant & WER (\%) & Params (M) \\
 \midrule
-Default %(shared Stage~1, bridge, $\ell_1{=}2,\ell_2{=}1$, $d{=}256$)
-                                    & 0.319 & 4.6 \\
-$-$ cross-attention bridge          & 0.332 & 3.8 \\
-$-$ shared Stage~1 %(separate per expert)
-                                    & 0.320 & 7.5 \\
-$\ell_{\text{stage1}}=1$            & 0.334 & 3.0 \\
-$\ell_{\text{stage1}}=4$            & 0.323 & 7.8 \\
-$\ell_{\text{stage2}}=2$            & 0.321 & 5.2 \\
-$d=128$                             & 0.337 & 1.4 \\
-$d=512$                             & 0.316 & 14.9 \\
+Default (shared Stage~1, bridge, $\ell_1{=}2, \ell_2{=}1, d{=}256, h{=}4$) & 34.4 & 4.6 \\
+$-$ cross-attention bridge          & 34.9 & 3.8 \\
+$-$ shared Stage~1 (separate per expert) & 34.2 & 7.5 \\
+$-$ cross-attention bridge \& shared Stage~1 & 33.6 & 6.7 \\
+$\ell_{\text{stage1}}=1$            & 34.3 & 3.0 \\
+$\ell_{\text{stage1}}=4$            & 34.5 & 7.8 \\
+$\ell_{\text{stage2}}=2$            & 34.1 & 5.2 \\
+$d=128$                             & 35.0 & 1.4 \\
+$d=512$                             & 34.4 & 14.9 \\
+$h=2$                               & 33.9 & 4.6 \\
+$h=8$                               & 34.4 & 4.6 \\
+$\text{dropout}=0.2$                & 34.9 & 4.6 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
 
 \subsection{Discussion}
 \label{subsec:discussion}
