@@ -132,6 +132,8 @@ Our contributions are summarized as follows:
 
 \item We present a routing-model-agnostic formulation in which the hierarchical transformer can be replaced by alternative sequence learners, such as recurrent or convolutional models, without changing the overall adaptive ASR pipeline.
 
+\item We share all our codes for further research and reproducibility at \url{https://github.com/huseyin-karaca/hit-asr}.
+
 \end{itemize}
 
 
@@ -607,15 +609,15 @@ gains (Section~\ref{subsec:ablation}). Section~\ref{subsec:discussion}
 discusses what the experiments support and where the framework breaks
 down.
 
-Throughout the section we report Word Error Rate ($\mathrm{WER}$) as
-the primary metric and, where applicable, the routing-specific
-quantities introduced in Section~\ref{sec:workdone}: \emph{selection
-accuracy} (the fraction of clips for which the router picks the
-oracle expert) and the \emph{oracle gap}
-$\mathrm{WER}_{\text{router}}-\mathrm{WER}_{\text{oracle}}$, where
-$\mathrm{WER}_{\text{oracle}}$ is the per-clip minimum WER across
-experts. The oracle gap measures how far the router is from the
-hindsight-optimal selection on the same clips.
+% Throughout the section we report Word Error Rate ($\mathrm{WER}$) as
+% the primary metric and, where applicable, the routing-specific
+% quantities introduced in Section~\ref{sec:workdone}: \emph{selection
+% accuracy} (the fraction of clips for which the router picks the
+% oracle expert) and the \emph{oracle gap}
+% $\mathrm{WER}_{\text{router}}-\mathrm{WER}_{\text{oracle}}$, where
+% $\mathrm{WER}_{\text{oracle}}$ is the per-clip minimum WER across
+% experts. The oracle gap measures how far the router is from the
+% hindsight-optimal selection on the same clips.
 
 \subsection{Synthetic Regime-Switch Experiment}
 \label{subsec:synthetic}
@@ -703,10 +705,8 @@ advantage scales with the difficulty of the temporal pattern.
 \midrule
 Random                        & 37.9 &  33.2 \\
 Weighted random               & 37.5 &  34.3 \\
-MLP-pool (hard CE)            & 29.1 &  58.1 \\
-MLP-pool (full recipe)        & 28.9 &  58.1 \\
-HIT-ASR (WER $+$ soft CE)    & 15.3 & 100.0 \\
-HIT-ASR (full recipe)        & 15.3 & 100.0 \\
+MLP-pool                      & 28.9 &  58.1 \\
+HIT-ASR                       & 15.3 & 100.0 \\
 \midrule
 Oracle                        & 15.3 & 100.0 \\
 \bottomrule
@@ -765,8 +765,6 @@ We compare the proposed router against:
     proportional to inverse training-set WER.
     \item ROVER~\cite{fiscus1997rover}: hypothesis-level voting that
     runs all $K$ experts and combines their outputs.
-    \item Weighted ROVER: ROVER with per-expert confidence weights
-    set from training-set WER.
     \item MLP-pool selector: same as in
     Section~\ref{subsec:synthetic}; mean-pools each expert's
     frame-level features and feeds the concatenation to an MLP
@@ -816,9 +814,9 @@ Wav2Vec2-Large-Robust & 38.52 & 29.81 \\
 \midrule
 Random & 54.44 & 56.57 \\
 Weighted random & 49.22 & 26.28 \\
-ROVER & 43.10 & 22.52 \\
+ROVER & 43.10 & 24.52 \\
 MLP-pool (hard CE) & 38.31 & 29.81 \\
-HIT-ASR & 34.23 & 23.04 \\
+HIT-ASR & \textbf{34.23} & \textbf{23.04} \\
 \midrule
 Oracle & 24.13 & 16.47 \\
 \bottomrule
@@ -848,33 +846,21 @@ and $\tau$ on AMI, keeping all other hyperparameters fixed.
 \midrule
 WER only                 & 1.0 & 0.0 & 0.0 & {--}  & 38.2 \\
 Hard CE only             & 0.0 & 1.0 & 0.0 & {--}  & 37.1 \\
-Soft CE only ($\tau=0.1$)& 0.0 & 0.0 & 1.0 & 0.1 & 34.3 \\
-Soft CE only ($\tau=1.5$)& 0.0 & 0.0 & 1.0 & 1.5 & \textbf{33.5} \\
+Soft CE only             & 0.0 & 0.0 & 1.0 & 0.1 & 34.3 \\
+Soft CE only             & 0.0 & 0.0 & 1.0 & 1.5 & 33.5 \\
 WER $+$ Hard CE          & 1.0 & 0.3 & 0.0 & {--}  & 34.7 \\
-WER $+$ Soft CE ($\tau=0.1$) & 1.0 & 0.0 & 0.5 & 0.1 & 34.2 \\
-WER $+$ Soft CE ($\tau=1.5$) & 1.0 & 0.0 & 0.5 & 1.5 & 35.6 \\
-Heavy Soft CE ($\tau=0.5$)   & 1.0 & 0.0 & 1.0 & 0.5 & 33.5 \\
-Full Recipe ($\tau=0.5$) & 1.0 & 0.3 & 0.5 & 0.5 & 33.9 \\
-Full Recipe ($\tau=1.5$) & 1.0 & 0.3 & 0.5 & 1.5 & 34.4 \\
+WER $+$ Soft CE          & 1.0 & 0.0 & 0.5 & 0.1 & 34.2 \\
+WER $+$ Soft CE          & 1.0 & 0.0 & 0.5 & 1.5 & 35.6 \\
+Heavy Soft CE            & 1.0 & 0.0 & 1.0 & 0.5 & 33.5 \\
+Full Recipe              & 1.0 & 0.3 & 0.5 & 0.5 & 33.9 \\
+Full Recipe              & 1.0 & 0.3 & 0.5 & 1.5 & \textbf{33.4} \\
 \midrule
 Oracle                   & {--}  & {--}  & {--}  & {--}  & 23.7 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Two patterns are worth noting. First, selection accuracy and final
-WER are not aligned: \emph{Hard CE only} and \emph{WER $+$ Hard CE}
-reach the highest selection accuracies (up to $56.6\%$) but perform
-poorly in terms of WER, because picking the oracle expert is rewarded
-equally regardless of how much better the oracle was. Second, variants
-incorporating \emph{Soft CE} achieve the lowest WER, despite a lower
-selection accuracy (e.g., $41.9\%$ or $45.2\%$): the soft target
-carries WER-magnitude information into the gradient, which steers the
-router toward decisions whose mistakes are cheap. The full recipe and
-its variants balance these trade-offs, establishing a clean story
-that optimizing for the oracle is not identical to optimizing for WER.
-This is the configuration we report as the default in
-Section~\ref{subsec:real}.
+Two patterns are worth noting. First, optimizing strictly to match the oracle expert does not align perfectly with minimizing the final WER: \emph{Hard CE only} and \emph{WER $+$ Hard CE} penalize any deviation from the oracle, but perform poorly in terms of overall WER. This occurs because picking the oracle expert is rewarded equally regardless of how much better the oracle was compared to the alternatives. Second, variants incorporating \emph{Soft CE} achieve the lowest WER: the soft target carries WER-magnitude information into the gradient, which steers the router toward decisions whose mistakes are cheap, even if it occasionally misses the exact oracle. The full recipe and its variants balance these trade-offs, establishing a clean story that optimizing for the oracle is not identical to optimizing for WER. This is the configuration we report as the default in Section~\ref{subsec:real}.
 
 \subsubsection{Architecture Ablation}
 
@@ -895,25 +881,32 @@ to $34.4\%$ without a massive parameter increase.
 
 \begin{table}[t]
 \centering
-\caption{Ablation of the HIT-ASR router architecture on the AMI test set. The default configuration uses shared Stage 1 weights and a cross-attention bridge to balance capacity and regularization.}
+\caption{Ablation of the HIT-ASR router architecture on the AMI test set. The default configuration uses shared Stage 1 weights and a cross-attention (CA) bridge to balance capacity and regularization.}
 \label{tab:arch_ablation}
 \small
-\begin{tabular}{p{4.5cm} S[table-format=2.1] S[table-format=2.1]}
+\begin{tabular}{p{4.1cm} S[table-format=2.1] S[table-format=2.1]}
 \toprule
 \textbf{Variant} & {\textbf{WER (\%, $\downarrow$)}} & {\textbf{Params (M)}} \\
 \midrule
-Default (shared Stage~1, bridge, $\ell_1{=}2, \ell_2{=}1, d{=}256, h{=}4$) & 34.4 & 4.6 \\
-$-$ cross-attention bridge          & 34.9 & 3.8 \\
-$-$ shared Stage~1 (separate per expert) & 34.2 & 7.5 \\
-$-$ cross-attention bridge \& shared Stage~1 & 33.6 & 6.7 \\
-$\ell_{\text{stage1}}=1$            & 34.3 & 3.0 \\
-$\ell_{\text{stage1}}=4$            & 34.5 & 7.8 \\
-$\ell_{\text{stage2}}=2$            & 34.1 & 5.2 \\
-$d=128$                             & 35.0 & 1.4 \\
-$d=512$                             & 34.4 & 14.9 \\
-$h=2$                               & 33.9 & 4.6 \\
-$h=8$                               & 34.4 & 4.6 \\
-$\text{dropout}=0.2$                & 34.9 & 4.6 \\
+\textit{Reference} & & \\
+Default (shared S1 + bridge) & 34.4 & 4.6 \\
+\midrule
+\textit{Connectivity / sharing} & & \\
+$-$ CA bridge & 34.9 & 3.8 \\
+$-$ shared Stage~1 (per expert) & 34.2 & 7.5 \\
+$-$ CA bridge \& shared Stage~1 & 33.6 & 6.7 \\
+\midrule
+\textit{Depth} & & \\
+$\ell_{\text{stage1}}=1$ & 34.3 & 3.0 \\
+$\ell_{\text{stage1}}=4$ & 34.5 & 7.8 \\
+$\ell_{\text{stage2}}=2$ & 34.1 & 5.2 \\
+\midrule
+\textit{Width / heads / regularization} & & \\
+$d=128$ & 35.0 & 1.4 \\
+$d=512$ & 34.4 & 14.9 \\
+$h=2$ & 33.9 & 4.6 \\
+$h=8$ & 34.4 & 4.6 \\
+$\text{dropout}=0.2$ & 34.9 & 4.6 \\
 \bottomrule
 \end{tabular}
 \end{table}
